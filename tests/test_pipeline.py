@@ -78,7 +78,10 @@ def test_unlabelled_no_self_loops(unlabelled_data):
 
 def test_unlabelled_signals_are_valid(unlabelled_data):
     _, account_signals = unlabelled_data
-    valid_signals = {"Rapid Fan-Out", "Round-Trip", "Structuring", "Layering Velocity"}
+    valid_signals = {
+        "Rapid Fan-Out", "Round-Trip", "Structuring", "Layering Velocity",
+        "Dormant Activation", "Currency Mismatch", "Smurfing",
+    }
     for acc, sigs in account_signals.items():
         for sig in sigs:
             assert sig in valid_signals, f"Unknown signal '{sig}' for account {acc}"
