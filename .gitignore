@@ -1,0 +1,50 @@
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Pytest / test cache
+.pytest_cache/
+.cache/
+htmlcov/
+.coverage
+*.cover
+
+# Dataset files (too large for git)
+data/*.csv
+data/*.zip
+data/*.parquet
+
+# Validation output (regenerated on each run)
+data/validation_results.json
+
+# whitelist.json is intentionally committed — do NOT add it here
+# data/whitelist.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+*.env
+kaggle.json
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
