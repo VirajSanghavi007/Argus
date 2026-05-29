@@ -74,7 +74,6 @@ def _maybe_download_csv():
         return
     logger.info("HI-Small_Trans.csv not found — attempting Kaggle download...")
     try:
-        import os
         from kaggle.api.kaggle_api_extended import KaggleApi
         api = KaggleApi()
         api.authenticate()
@@ -85,7 +84,6 @@ def _maybe_download_csv():
             path=str(DATA_DIR),
             force=False,
         )
-        # Unzip if downloaded as .zip
         zip_path = DATA_DIR / "HI-Small_Trans.csv.zip"
         if zip_path.exists():
             import zipfile
