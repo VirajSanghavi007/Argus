@@ -13,7 +13,7 @@ All endpoints return JSON. CORS is open (`*`).
 
 ## GET /health
 
-Always returns 200, regardless of pipeline state. Used by `run.bat` to determine when the server is accepting connections.
+Always returns 200, regardless of pipeline state. Used by `Bootup.bat` to determine when the server is accepting connections.
 
 ```json
 {"status": "ok"}

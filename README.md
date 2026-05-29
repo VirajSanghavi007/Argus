@@ -144,7 +144,7 @@ kaggle datasets download -d ealtman2019/ibm-transactions-for-anti-money-launderi
 
 **Windows (double-click):**
 ```
-run.bat
+Bootup.bat
 ```
 
 **Manual:**
@@ -227,7 +227,7 @@ aml-prototype/
 │   └── API.md
 ├── render.yaml          # Render deployment config
 ├── DEPLOYMENT.md        # Deployment instructions
-├── run.bat
+├── Bootup.bat
 └── README.md
 ```
 
