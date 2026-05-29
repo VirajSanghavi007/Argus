@@ -2,6 +2,8 @@ import json
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -72,18 +74,27 @@ def _maybe_download_csv():
         return
     logger.info("HI-Small_Trans.csv not found — attempting Kaggle download...")
     try:
-        import subprocess, sys, os
-        env = os.environ.copy()
-        result = subprocess.run(
-            [sys.executable, "-m", "kaggle", "datasets", "download",
-             "-d", "ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
-             "-f", "HI-Small_Trans.csv", "-p", str(DATA_DIR), "--unzip"],
-            capture_output=True, text=True, env=env,
+        import os
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        api = KaggleApi()
+        api.authenticate()
+        logger.info("Kaggle authenticated. Downloading CSV...")
+        api.dataset_download_file(
+            dataset="ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
+            file_name="HI-Small_Trans.csv",
+            path=str(DATA_DIR),
+            force=False,
         )
-        if result.returncode == 0:
-            logger.info("Kaggle download complete.")
+        # Unzip if downloaded as .zip
+        zip_path = DATA_DIR / "HI-Small_Trans.csv.zip"
+        if zip_path.exists():
+            import zipfile
+            with zipfile.ZipFile(zip_path, "r") as z:
+                z.extractall(DATA_DIR)
+            zip_path.unlink()
+            logger.info("Kaggle download and extraction complete.")
         else:
-            logger.error(f"Kaggle download failed:\n{result.stderr}")
+            logger.info("Kaggle download complete.")
     except Exception as e:
         logger.error(f"Could not download CSV: {e}")
 
@@ -143,6 +154,14 @@ app = FastAPI(title="AML Intelligence Platform API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+
+# Serve frontend
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
 # ── core endpoints ────────────────────────────────────────────────────────────
