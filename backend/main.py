@@ -74,6 +74,9 @@ def _maybe_download_csv():
         return
     logger.info("HI-Small_Trans.csv not found — attempting Kaggle download...")
     try:
+        import os
+        os.environ['KAGGLE_USERNAME'] = os.environ.get('KAGGLE_USERNAME', '')
+        os.environ['KAGGLE_KEY'] = os.environ.get('KAGGLE_KEY', '')
         from kaggle.api.kaggle_api_extended import KaggleApi
         api = KaggleApi()
         api.authenticate()
