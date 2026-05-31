@@ -205,7 +205,10 @@ The trained model is saved to `data/fraud_model.pkl` and loaded on subsequent st
 
 | Member | Contribution |
 |---|---|
-| Viraj Sanghavi | Backend, ML model, graph detection pipeline, frontend, deployment |
+| Viraj   | Backend, ML model, graph detection pipeline, frontend, deployment |
+| Sonal   | |
+| Archit  | |
+| Suruchi | |
 
 ---
 
