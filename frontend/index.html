@@ -51,6 +51,44 @@ body.dark{
   --muted:   #94A3B8;
   --light:  #475569;
 }
+
+/* ── Dark mode overrides for all hardcoded #fff / #F8FAFC elements ── */
+body.dark nav,
+body.dark .inv-left,
+body.dark .inv-right,
+body.dark .inv-timeline,
+body.dark .inv-stats-strip,
+body.dark .route-bar,
+body.dark .db-chart-card,
+body.dark .timeline-card,
+body.dark .stage-card,
+body.dark .ac,
+body.dark .route-pill,
+body.dark .graph-btn,
+body.dark #tooltip,
+body.dark .table-wrap,
+body.dark .search-card,
+body.dark .wl-panel,
+body.dark .suppressed-section,
+body.dark .toast,
+body.dark .btn-ghost,
+body.dark #loading-overlay
+{ background: var(--surface) !important; }
+
+body.dark .nav-tab:hover { background: var(--bg) !important; }
+body.dark #cy            { background: #0D1B2A !important; }
+body.dark .wl-account-item,
+body.dark .wl-rule-item  { background: var(--bg) !important; }
+
+body.dark input[type=text],
+body.dark input[type=search],
+body.dark select,
+body.dark textarea
+{ background: var(--bg) !important; color: var(--text) !important; }
+
+body.dark .filter-pill   { background: var(--bg) !important; }
+body.dark ::-webkit-scrollbar-track { background: var(--surface); }
+
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--mono);background:var(--bg);color:var(--text);
   height:100vh;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
@@ -888,7 +926,7 @@ function renderDashboard() {
     type:'doughnut',
     data:{ labels:Object.keys(ptMap), datasets:[{ data:Object.values(ptMap),
       backgroundColor:colors, borderColor:'#fff', borderWidth:2 }]},
-    options:{ plugins:{ legend:{ position:'right', labels:{ color:'#475569', font:{size:10}, boxWidth:12 } } },
+    options:{ plugins:{ legend:{ position:'right', labels:{ color:document.body.classList.contains('dark')?'#94A3B8':'#475569', font:{size:10}, boxWidth:12 } } },
       cutout:'62%', maintainAspectRatio:false }
   });
 
@@ -910,8 +948,8 @@ function renderDashboard() {
       data:{ labels:sortedB.map(x=>getBankName(x[0])), datasets:[{ data:sortedB.map(x=>x[1]),
         backgroundColor:'#2563EB', borderRadius:2 }]},
       options:{ indexAxis:'y', plugins:{legend:{display:false}},
-        scales:{ x:{ticks:{color:'#475569',font:{family:'DM Mono'}}},
-                 y:{ticks:{color:'#475569',font:{family:'DM Mono',size:10}}} },
+        scales:{ x:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono'}}},
+                 y:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono',size:10}}} },
         maintainAspectRatio:false }
     });
   }
@@ -965,7 +1003,7 @@ dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
         { label:'Labelled', data:bins, borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,.08)', tension:.3, fill:true, pointRadius:2 },
         { label:'Unlabelled', data:binsU, borderColor:'#7C3AED', backgroundColor:'rgba(124,58,237,.08)', tension:.3, fill:true, pointRadius:2 }
       ]},
-    options:{ plugins:{legend:{labels:{color:'#475569',font:{size:10}}}},
+    options:{ plugins:{legend:{labels:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{size:10}}}},
       scales:{ x:{ticks:{color:'#475569',maxTicksLimit:12,font:{size:10}}},
                y:{ticks:{color:'#475569',font:{size:10}}} },
       maintainAspectRatio:false }
@@ -1196,7 +1234,8 @@ function renderGraph() {
         'target-arrow-color': e => FMT_EDGE[e.data('fmt')]||'#94A3B8',
         'target-arrow-shape':'triangle', 'curve-style':'bezier',
         'width':1.5, 'font-size':8, 'color':'#475569',
-        'text-background-color':'#fff', 'text-background-opacity':.9,
+        'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
+        'text-background-opacity':.9,
         'text-background-padding':2,
       }},
       { selector:'node', style:{
