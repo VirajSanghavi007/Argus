@@ -1063,16 +1063,64 @@ const FMT_EDGE = { RTGS:'#2563EB', NEFT:'#059669', Cheque:'#D97706', 'Credit Car
 
 function getLayout(alert) {
   if (!alert) return { name:'cose', padding:30, animate:false };
-  if (alert.patternType === 'fanOut') {
-    const dist = alert.nodes.find(n=>n.role==='Distributor');
-    return { name:'breadthfirst', directed:true, padding:30,
-      roots: dist ? [`#${dist.id}`] : undefined, spacingFactor:2.5, avoidOverlap:true };
+  const pt    = alert.patternType;
+  const nodes = alert.nodes || [];
+
+  // Helper: build a preset positions map for a two-column layout.
+  // leftNodes go at x=0, rightNodes at x=350, each column evenly spaced vertically.
+  function twoCol(leftNodes, rightNodes) {
+    const count   = Math.max(leftNodes.length, rightNodes.length);
+    const spacing = Math.max(55, 320 / Math.max(count, 1));
+    const positions = {};
+    leftNodes.forEach((n, i) => {
+      positions[n.id] = { x: 0, y: i * spacing };
+    });
+    const rightOffset = ((leftNodes.length - rightNodes.length) / 2) * spacing;
+    rightNodes.forEach((n, i) => {
+      positions[n.id] = { x: 350, y: rightOffset + i * spacing };
+    });
+    return { name:'preset', positions, padding:50, fit:true };
   }
-  if (alert.patternType === 'fanIn') {
-    const senders = alert.nodes.filter(n=>n.role==='Sender').map(n=>`#${n.id}`);
-    return { name:'breadthfirst', directed:true, padding:30,
-      roots: senders.length ? senders : undefined, spacingFactor:2.5, avoidOverlap:true };
+
+  if (pt === 'fanOut') {
+    // Distributor centered left, all recipients spread vertically on the right.
+    const dist = nodes.find(n => n.role === 'Distributor') || nodes[0];
+    const recipients = nodes.filter(n => n !== dist);
+    if (dist && recipients.length) return twoCol([dist], recipients);
+    return { name:'breadthfirst', directed:true, padding:30, spacingFactor:2.5, avoidOverlap:true };
   }
+
+  if (pt === 'fanIn') {
+    // All senders spread vertically on the left, aggregator centered right.
+    const agg = nodes.find(n => n.role === 'Aggregator') || nodes[nodes.length - 1];
+    const senders = nodes.filter(n => n !== agg);
+    if (agg && senders.length) return twoCol(senders, [agg]);
+    return { name:'breadthfirst', directed:true, padding:30, spacingFactor:2.5, avoidOverlap:true };
+  }
+
+  if (pt === 'cycle') {
+    return { name:'circle', padding:30, spacingFactor:1.3, avoidOverlap:true };
+  }
+
+  if (pt === 'bipartite') {
+    // Coordinators on the left, Joint Targets on the right.
+    const coords  = nodes.filter(n => n.role === 'Coordinator');
+    const targets = nodes.filter(n => n.role === 'Joint Target');
+    if (coords.length && targets.length) return twoCol(coords, targets);
+    return { name:'breadthfirst', directed:true, padding:30, spacingFactor:1.5, avoidOverlap:true };
+  }
+
+  if (pt === 'scatterGather' || pt === 'gatherScatter') {
+    // Directed breadthfirst naturally produces left-to-right layered flow.
+    return { name:'breadthfirst', directed:true, padding:30, spacingFactor:1.8, avoidOverlap:true };
+  }
+
+  if (pt === 'stack') {
+    // DAG with multiple layers — breadthfirst shows the layered structure.
+    return { name:'breadthfirst', directed:true, padding:30, spacingFactor:1.5, avoidOverlap:true };
+  }
+
+  // RANDOM and fallback
   return { name:'cose', padding:30, animate:false, nodeRepulsion:4500 };
 }
 
