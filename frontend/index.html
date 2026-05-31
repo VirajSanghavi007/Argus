@@ -769,6 +769,7 @@ let dbCharts     = {};
 ════════════════════════════════════════════ */
 const STAGES = ['ls-0','ls-1','ls-2','ls-3','ls-4'];
 const BAR_PCTS = [10, 30, 60, 85, 100];
+const STAGE_DELAYS = [0, 1500, 3000, 4800, 6500]; // ms cumulative from init start
 
 function setStage(idx) {
   STAGES.forEach((id, i) => {
@@ -783,11 +784,17 @@ function setStage(idx) {
 }
 
 async function init() {
+  const t0 = Date.now();
   setStage(0);
   await pollUntilReady();
-  setStage(3);
+
+  // Enforce minimum cumulative time per stage so animation is visible even on cache hits
+  const minWait = s => Math.max(0, STAGE_DELAYS[s] - (Date.now() - t0));
+  await sleep(minWait(1)); setStage(1);
+  await sleep(minWait(2)); setStage(2);
+  await sleep(minWait(3)); setStage(3);
   await loadAllAlerts();
-  setStage(4);
+  await sleep(minWait(4)); setStage(4);
   await sleep(400);
   const ov = document.getElementById('loading-overlay');
   ov.style.transition = 'opacity .4s';
@@ -899,7 +906,7 @@ function renderDashboard() {
   if (sortedB.length) {
     dbCharts.banks = new Chart(bCtx, {
       type:'bar',
-      data:{ labels:sortedB.map(x=>x[0]), datasets:[{ data:sortedB.map(x=>x[1]),
+      data:{ labels:sortedB.map(x=>getBankName(x[0])), datasets:[{ data:sortedB.map(x=>x[1]),
         backgroundColor:'#2563EB', borderRadius:2 }]},
       options:{ indexAxis:'y', plugins:{legend:{display:false}},
         scales:{ x:{ticks:{color:'#475569',font:{family:'DM Mono'}}},
@@ -1089,6 +1096,23 @@ const SEV_NODE = {
 };
 const FMT_EDGE = { RTGS:'#2563EB', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
 
+const BANK_NAMES = [
+  'Apex National Bank','Meridian Trust Co.','Pinnacle Savings Bank',
+  'Harbor Commercial Bank','Summit Finance Corp','Central Mutual Bank',
+  'Pacific Trade Bank','Atlantic Financial Group','Inland Credit Union',
+  'Horizon Cooperative Bank','Unity Savings Bank','Frontier Banking Corp',
+  'Capital Fidelity Bank','Westpoint Savings','Northern Mutual Bank',
+  'Eastern Finance Group','Global Commerce Bank','Premier Credit Bank',
+  'Allied Banking Corp','First National Trust',
+];
+function getBankName(raw) {
+  if (!raw) return raw;
+  const id = String(raw).replace('Bank-','').trim();
+  const n  = parseInt(id, 10);
+  if (isNaN(n)) return id;
+  return BANK_NAMES[n % BANK_NAMES.length];
+}
+
 function getLayout(alert) {
   if (!alert) return { name:'cose', padding:30, animate:false };
   const pt    = alert.patternType;
@@ -1194,7 +1218,7 @@ function renderGraph() {
     tt.style.top  = (box.top+pos.y-20)+'px';
     tt.style.display='block';
     document.getElementById('tt-id').textContent   = n.id;
-    document.getElementById('tt-bank').textContent = n.bank||'—';
+    document.getElementById('tt-bank').textContent = getBankName(n.bank)||'—';
     document.getElementById('tt-role').textContent = n.role||'—';
     document.getElementById('tt-vol').textContent  = n.vol||'—';
     document.getElementById('tt-txn').textContent  = n.txn||'—';
@@ -1422,38 +1446,53 @@ function doSearch() {
   const q=(document.getElementById('search-inp').value||'').toLowerCase().trim();
   runSearch(q);
 }
-function qFilter(val,type='pat') {
-  document.getElementById('search-inp').value=val;
-  // Map camelCase keys to the display name so the search string matches formatPatternName output
-  const patMap = { fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
-    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK' };
-  const searchVal = (type==='pat' && patMap[val]) ? patMap[val].toLowerCase() : val.toLowerCase();
-  runSearch(searchVal, type);
+function qFilter(val, type='pat') {
+  // Show the formatted display name in the input but search by raw camelCase patternType
+  const patDisplayMap = {
+    fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
+    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK',
+  };
+  document.getElementById('search-inp').value = (type==='pat' && patDisplayMap[val]) ? patDisplayMap[val] : val;
+  runSearch(val, type);
 }
 function runSearch(q, type='auto') {
-  const container=document.getElementById('search-results');
+  const container = document.getElementById('search-results');
   if (!q) { container.innerHTML=`<div class="search-empty">Enter a search term above</div>`; return; }
-  const res = allAlerts.filter(a=>{
-    if (type==='sev') return a.severity===q.toUpperCase();
-    if (type==='src') return a.source===q;
-    const det=alertDetails[a.id];
-    const nodes=(det?det.nodes.map(n=>n.id).join(' '):'')||'';
-    const banks=(det?det.nodes.map(n=>(n.bank||'')).join(' '):'')||'';
-    return formatPatternName(a.patternType).toLowerCase().includes(q)||
-      a.id.toLowerCase().includes(q)||a.sub.toLowerCase().includes(q)||
-      nodes.toLowerCase().includes(q)||banks.toLowerCase().includes(q);
+  const res = allAlerts.filter(a => {
+    if (type==='sev') return a.severity === q.toUpperCase();
+    if (type==='src') return a.source === q;
+    // Bug 1 fix: for pattern filters use direct camelCase patternType comparison
+    // normalise both sides with underscores to handle any FAN_IN / FAN-IN mismatch
+    if (type==='pat') {
+      const norm = s => String(s).replace(/-/g,'_').toLowerCase();
+      return norm(a.patternType) === norm(q);
+    }
+    // Free-text search across id, pattern name, sub description, nodes, banks
+    const lq  = q.toLowerCase();
+    const det = alertDetails[a.id];
+    const nodes = (det ? det.nodes.map(n => n.id).join(' ') : '') || '';
+    const banks = (det ? det.nodes.map(n => getBankName(n.bank||'')).join(' ') : '') || '';
+    return formatPatternName(a.patternType).toLowerCase().includes(lq) ||
+      a.id.toLowerCase().includes(lq) ||
+      (a.sub||'').toLowerCase().includes(lq) ||
+      nodes.toLowerCase().includes(lq) ||
+      banks.toLowerCase().includes(lq);
   });
   if (!res.length) { container.innerHTML=`<div class="search-empty">No alerts match "${q}"</div>`; return; }
-  container.innerHTML = res.map(a=>`
+  container.innerHTML = res.map(a => {
+    // Bug 2 fix: always use the top-level patternType field for the card title
+    const patLabel = a.name || formatPatternName(a.patternType);
+    return `
     <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]}" onclick="jumpInvestigate('${a.id}')">
-      <div style="font-family:var(--sans);font-weight:700;margin-bottom:6px">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+      <div style="font-family:var(--sans);font-weight:700;margin-bottom:6px">${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
       </div>
-      <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.sub}</div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.sub||''}</div>
       <div style="font-size:11px;margin-top:6px;font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 /* ════════════════════════════════════════════
