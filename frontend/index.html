@@ -6,7 +6,7 @@
 <title>AML Intelligence Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -28,9 +28,24 @@
   --muted:  #475569;
   --light:  #94A3B8;
   /* fonts */
-  --sans: 'Syne', system-ui, sans-serif;
+  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
   --mono: 'DM Mono', 'Courier New', monospace;
   --r:4px;
+}
+body.dark{
+  --blue-bg:#1E3A5F; --blue-bd:#2563EB;
+  --purple-bg:#2D1B69; --purple-bd:#7C3AED;
+  --amber-bg:#3D2A00; --amber-bd:#D97706;
+  --green-bg:#052E16; --green-bd:#059669;
+  --teal-bg:#0C2B33; --teal-bd:#0891B2;
+  --red-bg:#2D0A0A; --red-bd:#DC2626;
+  --bg:     #0F172A;
+  --surface:#1E293B;
+  --border: #334155;
+  --border-lt:#1E293B;
+  --text:   #F1F5F9;
+  --muted:  #94A3B8;
+  --light:  #475569;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--mono);background:var(--bg);color:var(--text);
@@ -101,7 +116,7 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
 /* ── Colored cards ── */
 .color-card{border:1px solid;border-radius:var(--r);padding:20px;
-  border-left:4px solid}
+  border-left:4px solid;display:flex;flex-direction:column;gap:6px}
 .color-card.blue  {background:var(--blue-bg);border-color:var(--blue-bd);border-left-color:var(--blue)}
 .color-card.green {background:var(--green-bg);border-color:var(--green-bd);border-left-color:var(--green)}
 .color-card.red   {background:var(--red-bg);border-color:var(--red-bd);border-left-color:var(--red)}
@@ -366,8 +381,9 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   margin-bottom:6px;font-family:var(--mono);font-size:12px;background:#F8FAFC}
 .wl-remove-btn{background:none;border:none;color:var(--red);cursor:pointer;
   font-size:16px;line-height:1;padding:0 4px}
-.wl-form{display:flex;flex-direction:column;gap:10px}
+.wl-form{display:flex;flex-direction:column;gap:16px;height:100%}
 .wl-form input{width:100%}
+.wl-form .btn{margin-top:auto}
 .wl-exempt-banks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .wl-rules-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .wl-rule-item{background:#F8FAFC;border:1px solid var(--border-lt);
@@ -432,6 +448,10 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   <div class="nav-status">
     <div class="status-dot loading" id="status-dot"></div>
     <span class="status-label" id="status-label">Loading...</span>
+    <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" style="
+      margin-left:8px;background:none;border:1px solid var(--border);border-radius:var(--r);
+      padding:4px 8px;cursor:pointer;font-size:14px;color:var(--muted);line-height:1;
+      transition:all .15s ease;flex-shrink:0">☀️</button>
   </div>
 </nav>
 
@@ -654,12 +674,18 @@ input::placeholder,textarea::placeholder{color:var(--light)}
       <div style="margin-top:16px"><div class="wl-panel-title">Exempt Banks</div><div class="wl-exempt-banks" id="wl-banks-list"></div></div>
       <div style="margin-top:16px"><div class="wl-panel-title">Active Exemption Rules</div><div class="wl-rules-list" id="wl-rules-list"></div></div>
     </div>
-    <div class="wl-panel">
+    <div class="wl-panel" style="display:flex;flex-direction:column">
       <div class="wl-panel-title">Add Account to Whitelist</div>
-      <div class="wl-form">
-        <div><span class="label-up">Account ID</span><input type="text" id="wl-account-inp" placeholder="e.g. 80012345"/></div>
-        <div><span class="label-up">Reason</span><input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account"/></div>
-        <button class="btn btn-blue" onclick="addWhitelistAccount()">Add to Whitelist</button>
+      <div class="wl-form" style="flex:1">
+        <div>
+          <span class="label-up">Account ID</span>
+          <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:6px"/>
+        </div>
+        <div>
+          <span class="label-up">Reason</span>
+          <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account" style="margin-top:6px"/>
+        </div>
+        <button class="btn btn-blue" onclick="addWhitelistAccount()" style="margin-top:auto">Add to Whitelist</button>
       </div>
     </div>
   </div>
@@ -694,7 +720,7 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 ════════════════════════════════════════════ */
 const API_BASE = (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '')
   ? 'http://localhost:8000'
-  : : 'https://ideahackathon-1.onrender.com';;
+  : 'https://ideahackathon-1.onrender.com';
 
 /* ── Pattern formatting ── */
 function formatPatternName(pt) {
@@ -778,6 +804,14 @@ async function pollUntilReady() {
         const d = await r.json();
         setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
         lastCount = d.alert_count;
+        if (d.status === 'error') {
+          document.getElementById('status-dot').className = 'status-dot' ;
+          document.getElementById('status-dot').style.background = 'var(--red)';
+          document.getElementById('status-label').textContent = 'Pipeline error';
+          document.querySelector('.load-sub').textContent = d.error || 'Pipeline failed to start.';
+          document.querySelector('.load-sub').style.color = 'var(--red)';
+          return d;
+        }
         if (d.status === 'ready') {
           document.getElementById('status-dot').className = 'status-dot ready';
           document.getElementById('status-label').textContent =
@@ -800,6 +834,13 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 /* ════════════════════════════════════════════
    VIEW SWITCHING
 ════════════════════════════════════════════ */
+function toggleDark() {
+  const dark = document.body.classList.toggle('dark');
+  document.getElementById('dark-toggle').textContent = dark ? '🌙' : '☀️';
+  localStorage.setItem('aml-dark', dark ? '1' : '');
+}
+(function(){if(localStorage.getItem('aml-dark')){document.body.classList.add('dark');const b=document.getElementById('dark-toggle');if(b)b.textContent='🌙';}})();
+
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -947,13 +988,16 @@ function renderSidebar() {
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
-    const conf = Math.round((a.confidence||0)*100);
+    const conf   = Math.round((a.confidence||0)*100);
+    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
+    const mlBadge= mlPct != null ? `<span class="badge" style="background:${mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)';};color:${mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)'};border:1px solid ${mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)'}">ML ${mlPct}%</span>` : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')">
       ${decDot}
       <div class="ac-name">${formatPatternName(a.patternType)}</div>
       <div class="ac-badges">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
+        ${mlBadge}
       </div>
       <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%"></div></div>
       <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
@@ -1188,6 +1232,7 @@ function renderRightPanel() {
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
       <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
       <span class="badge badge-light">${Math.round((a.confidence||0)*100)}% CONF</span>
+      ${a.mlScore != null ? `<span class="badge" style="background:${a.mlScore>=0.7?'var(--red-bg)':a.mlScore>=0.4?'var(--amber-bg)':'var(--green-bg)'};color:${a.mlScore>=0.7?'var(--red)':a.mlScore>=0.4?'var(--amber)':'var(--green)'};border:1px solid ${a.mlScore>=0.7?'var(--red-bd)':a.mlScore>=0.4?'var(--amber-bd)':'var(--green-bd)'}">🤖 ML ${Math.round(a.mlScore*100)}%</span>` : ''}
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
 

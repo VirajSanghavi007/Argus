@@ -17,14 +17,18 @@ from whitelist import (
     add_to_whitelist, remove_from_whitelist,
     DEFAULT_WHITELIST,
 )
+from ml_model import train_or_load, score_subgraph
 
-logger   = logging.getLogger("uvicorn.error")
-DATA_DIR = Path(__file__).parent.parent / "data"
+logger     = logging.getLogger("uvicorn.error")
+DATA_DIR   = Path(__file__).parent.parent / "data"
+CACHE_PATH = DATA_DIR / "pipeline_cache.json"
 
 ALERTS:    dict = {}
 SUPPRESSED: dict = {}
 DECISIONS: dict = {}
 PIPELINE_READY = threading.Event()
+PIPELINE_ERROR: str = ""
+ML_METRICS: dict = {}
 
 LABELLED_COUNT   = 0
 UNLABELLED_COUNT = 0
@@ -68,76 +72,108 @@ def _ensure_data_dir():
         logger.info("Created default whitelist.json")
 
 
-def _maybe_download_csv():
-    from pipeline import CSV_PATH
-    if CSV_PATH.exists():
-        return
-    logger.info("HI-Small_Trans.csv not found — attempting Kaggle download...")
+def _load_cache() -> bool:
+    if not CACHE_PATH.exists():
+        return False
     try:
-        import os
-        os.environ['KAGGLE_USERNAME'] = os.environ.get('KAGGLE_USERNAME', '')
-        os.environ['KAGGLE_KEY'] = os.environ.get('KAGGLE_KEY', '')
-        from kaggle.api.kaggle_api_extended import KaggleApi
-        api = KaggleApi()
-        api.authenticate()
-        logger.info("Kaggle authenticated. Downloading CSV...")
-        api.dataset_download_file(
-            dataset="ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
-            file_name="HI-Small_Trans.csv",
-            path=str(DATA_DIR),
-            force=False,
-        )
-        zip_path = DATA_DIR / "HI-Small_Trans.csv.zip"
-        if zip_path.exists():
-            import zipfile
-            with zipfile.ZipFile(zip_path, "r") as z:
-                z.extractall(DATA_DIR)
-            zip_path.unlink()
-            logger.info("Kaggle download and extraction complete.")
-        else:
-            logger.info("Kaggle download complete.")
+        global ALERTS, SUPPRESSED, LABELLED_COUNT, UNLABELLED_COUNT, OVERLAP_COUNT, ML_METRICS
+        cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        ALERTS           = {a["id"]: a for a in cache["alerts"]}
+        SUPPRESSED       = {a["id"]: a for a in cache["suppressed"]}
+        LABELLED_COUNT   = cache["labelled_count"]
+        UNLABELLED_COUNT = cache["unlabelled_count"]
+        OVERLAP_COUNT    = cache["overlap_count"]
+        ML_METRICS       = cache.get("ml_metrics", {})
+        logger.info(f"Loaded from cache: {len(ALERTS)} alerts, {len(SUPPRESSED)} suppressed")
+        return True
     except Exception as e:
-        logger.error(f"Could not download CSV: {e}")
+        logger.warning(f"Cache load failed ({e}), running full pipeline")
+        return False
+
+
+def _save_cache():
+    try:
+        cache = {
+            "alerts":           list(ALERTS.values()),
+            "suppressed":       list(SUPPRESSED.values()),
+            "labelled_count":   LABELLED_COUNT,
+            "unlabelled_count": UNLABELLED_COUNT,
+            "overlap_count":    OVERLAP_COUNT,
+            "ml_metrics":       ML_METRICS,
+        }
+        CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+        logger.info(f"Pipeline cache saved to {CACHE_PATH}")
+    except Exception as e:
+        logger.warning(f"Could not save cache: {e}")
 
 
 # ── pipeline thread ───────────────────────────────────────────────────────────
 
 def _run_pipeline():
-    global ALERTS, SUPPRESSED, LABELLED_COUNT, UNLABELLED_COUNT, OVERLAP_COUNT
+    global ALERTS, SUPPRESSED, LABELLED_COUNT, UNLABELLED_COUNT, OVERLAP_COUNT, PIPELINE_ERROR, ML_METRICS
 
-    logger.info("Pipeline starting in background thread...")
-    _maybe_download_csv()
+    try:
+        # Fast path: load from cache if available
+        if _load_cache():
+            PIPELINE_READY.set()
+            return
 
-    df_suspicious, df_full, G_suspicious, G_full = load_and_build()
+        # Slow path: run full pipeline
+        logger.info("No cache found — running full pipeline...")
+        from pipeline import CSV_PATH
+        if not CSV_PATH.exists():
+            raise FileNotFoundError(
+                f"Dataset not found at {CSV_PATH}. "
+                "Ensure HI-Small_Trans.csv is in the data/ directory."
+            )
 
-    labelled_raw = detect_all_patterns(
-        G_suspicious, df_suspicious, source="labelled", id_prefix="",
-    )
-    G_unlabelled, account_signals = find_suspicious_unlabelled(df_full)
-    unlabelled_raw = detect_all_patterns(
-        G_unlabelled, df_full,
-        source="unlabelled", account_signals=account_signals, id_prefix="u_",
-    )
+        df_suspicious, df_full, G_suspicious, G_full = load_and_build()
 
-    merged_raw, overlap = _merge_raw_alerts(labelled_raw, unlabelled_raw)
+        # Train / load ML fraud classifier
+        model, ML_METRICS = train_or_load(G_suspicious, G_full)
 
-    whitelist    = load_whitelist()
-    kept_raw, supp_raw = filter_alerts(merged_raw, whitelist)
+        labelled_raw = detect_all_patterns(
+            G_suspicious, df_suspicious, source="labelled", id_prefix="",
+        )
+        G_unlabelled, account_signals = find_suspicious_unlabelled(df_full)
+        unlabelled_raw = detect_all_patterns(
+            G_unlabelled, df_full,
+            source="unlabelled", account_signals=account_signals, id_prefix="u_",
+        )
 
-    serialized        = serialize_alerts(kept_raw)
-    suppressed_ser    = serialize_alerts(supp_raw)
+        merged_raw, overlap = _merge_raw_alerts(labelled_raw, unlabelled_raw)
 
-    ALERTS     = {a["id"]: a for a in serialized}
-    SUPPRESSED = {a["id"]: a for a in suppressed_ser}
+        # Score each alert with the ML model
+        logger.info("Scoring alerts with ML model...")
+        for alert in merged_raw:
+            comp   = set(n["node_id"] for n in alert["nodes_list"])
+            G_ref  = G_unlabelled if alert.get("source") == "unlabelled" else G_suspicious
+            sub    = G_ref.subgraph(comp).copy()
+            alert["ml_score"] = score_subgraph(sub, model) if sub.number_of_nodes() >= 2 else 0.5
 
-    LABELLED_COUNT   = sum(1 for a in ALERTS.values() if a["source"] in ("labelled", "both"))
-    UNLABELLED_COUNT = sum(1 for a in ALERTS.values() if a["source"] in ("unlabelled", "both"))
-    OVERLAP_COUNT    = overlap
+        whitelist = load_whitelist()
+        kept_raw, supp_raw = filter_alerts(merged_raw, whitelist)
 
-    logger.info(
-        f"Labelled: {len(labelled_raw)} | Unlabelled: {len(unlabelled_raw)} | "
-        f"Overlap: {overlap} | Suppressed: {len(SUPPRESSED)} | Total: {len(ALERTS)}"
-    )
+        serialized     = serialize_alerts(kept_raw)
+        suppressed_ser = serialize_alerts(supp_raw)
+
+        ALERTS     = {a["id"]: a for a in serialized}
+        SUPPRESSED = {a["id"]: a for a in suppressed_ser}
+
+        LABELLED_COUNT   = sum(1 for a in ALERTS.values() if a["source"] in ("labelled", "both"))
+        UNLABELLED_COUNT = sum(1 for a in ALERTS.values() if a["source"] in ("unlabelled", "both"))
+        OVERLAP_COUNT    = overlap
+
+        logger.info(
+            f"Labelled: {len(labelled_raw)} | Unlabelled: {len(unlabelled_raw)} | "
+            f"Overlap: {overlap} | Suppressed: {len(SUPPRESSED)} | Total: {len(ALERTS)}"
+        )
+        _save_cache()
+
+    except Exception as e:
+        PIPELINE_ERROR = str(e)
+        logger.error(f"Pipeline failed: {e}")
+
     PIPELINE_READY.set()
 
 
@@ -179,8 +215,8 @@ def status():
     for a in ALERTS.values():
         pt = a["patternType"]
         patterns[pt] = patterns.get(pt, 0) + 1
-    return {
-        "status":           "ready" if ready else "loading",
+    result = {
+        "status":           "error" if (ready and PIPELINE_ERROR) else ("ready" if ready else "loading"),
         "alert_count":      len(ALERTS),
         "labelled_count":   LABELLED_COUNT,
         "unlabelled_count": UNLABELLED_COUNT,
@@ -188,6 +224,9 @@ def status():
         "suppressed_count": len(SUPPRESSED),
         "patterns":         patterns,
     }
+    if PIPELINE_ERROR:
+        result["error"] = PIPELINE_ERROR
+    return result
 
 
 @app.get("/alerts")
@@ -231,7 +270,7 @@ def list_suppressed():
 @app.get("/alerts/{alert_id}")
 def get_alert(alert_id: str):
     if alert_id not in ALERTS:
-        raise HTTPException(status_code=404, detail={"error": "not found"})
+        raise HTTPException(status_code=404, detail="Alert not found")
     return ALERTS[alert_id]
 
 
@@ -243,7 +282,7 @@ class DecisionBody(BaseModel):
 @app.post("/alerts/{alert_id}/decision")
 def post_decision(alert_id: str, body: DecisionBody):
     if alert_id not in ALERTS:
-        raise HTTPException(status_code=404, detail={"error": "not found"})
+        raise HTTPException(status_code=404, detail="Alert not found")
     DECISIONS[alert_id] = {"decision": body.decision, "reason": body.reason}
     return {"status": "saved", "alert_id": alert_id, "decision": body.decision}
 
@@ -272,11 +311,20 @@ def whitelist_remove(account_id: str):
     return {"status": "removed", "account_id": account_id}
 
 
+# ── ml metrics ────────────────────────────────────────────────────────────────
+
+@app.get("/ml-metrics")
+def get_ml_metrics():
+    if not ML_METRICS:
+        raise HTTPException(status_code=404, detail="ML model not trained yet")
+    return ML_METRICS
+
+
 # ── validation ────────────────────────────────────────────────────────────────
 
 @app.get("/validation")
 def get_validation():
     results_path = DATA_DIR / "validation_results.json"
     if not results_path.exists():
-        raise HTTPException(status_code=404, detail={"error": "validation not run yet"})
+        raise HTTPException(status_code=404, detail="Validation not run yet")
     return json.loads(results_path.read_text(encoding="utf-8"))

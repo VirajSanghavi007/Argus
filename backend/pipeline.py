@@ -1,7 +1,9 @@
+import logging
 import pandas as pd
 import networkx as nx
 from pathlib import Path
 
+logger   = logging.getLogger("uvicorn.error")
 DATA_DIR = Path(__file__).parent.parent / "data"
 CSV_PATH = DATA_DIR / "HI-Small_Trans.csv"
 
@@ -10,15 +12,20 @@ WINDOW_END   = pd.Timestamp("2022-09-02 23:59")
 
 
 def load_and_build():
+    if not CSV_PATH.exists():
+        raise FileNotFoundError(
+            f"Dataset not found at {CSV_PATH}. "
+            "Ensure HI-Small_Trans.csv is committed to the data/ directory."
+        )
     df = pd.read_csv(CSV_PATH)
-    print(f"Loaded: {df.shape[0]} rows, {df.shape[1]} columns")
+    logger.info(f"Loaded: {df.shape[0]} rows, {df.shape[1]} columns")
 
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="%Y/%m/%d %H:%M")
     df.sort_values("Timestamp", inplace=True)
     df.reset_index(drop=True, inplace=True)
 
     df = df[(df["Timestamp"] >= WINDOW_START) & (df["Timestamp"] <= WINDOW_END)]
-    print(f"48-hr window: {len(df)} rows")
+    logger.info(f"48-hr window: {len(df)} rows")
 
     # Remove self-loops (Reinvestment rows)
     df = df[df["Account"] != df["Account.1"]].copy()
@@ -26,18 +33,18 @@ def load_and_build():
     df_suspicious = df[df["Is Laundering"] == 1].copy()
     df_full = df.copy()
 
-    print(f"Suspicious rows: {len(df_suspicious)}")
+    logger.info(f"Suspicious rows: {len(df_suspicious)}")
 
     G_suspicious = _build_graph(df_suspicious)
     G_full       = _build_graph(df_full)
 
-    print(f"G_suspicious: {G_suspicious.number_of_nodes()} nodes, {G_suspicious.number_of_edges()} edges")
+    logger.info(f"G_suspicious: {G_suspicious.number_of_nodes()} nodes, {G_suspicious.number_of_edges()} edges")
     return df_suspicious, df_full, G_suspicious, G_full
 
 
 def find_suspicious_unlabelled(df_full: pd.DataFrame):
     """
-    Detects suspicious accounts from unlabelled transaction data using 4 behavioural signals.
+    Detects suspicious accounts from unlabelled transaction data using 7 behavioural signals.
 
     Signals:
       1. Rapid Fan-Out   – sends to 3+ different recipients within any 2-hour bucket
@@ -62,7 +69,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
             if signal_name not in flagged[acc]:
                 flagged[acc].append(signal_name)
 
-    print("Unlabelled detection — running 7 signals...")
+    logger.info("Unlabelled detection — running 7 signals...")
 
     # ── Signal 1: Rapid Fan-Out ──────────────────────────────────────────────
     # Account sends to 3+ distinct recipients within any fixed 2-hour bucket.
@@ -74,7 +81,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     )
     s1_accs = s1[s1 >= 3].reset_index()["Account"].unique()
     _flag(s1_accs, "Rapid Fan-Out")
-    print(f"  Signal 1 (Rapid Fan-Out):    {len(s1_accs):6,} accounts")
+    logger.info(f"  Signal 1 (Rapid Fan-Out):    {len(s1_accs):6,} accounts")
 
     # ── Signal 2: Round-Trip within 24 hours ────────────────────────────────
     # For each unique (A→B) pair, check if (B→A) also exists with timestamps
@@ -93,7 +100,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     rt24 = rt[rt["diff_sec"] <= 86400]
     rt_accs = pd.unique(pd.concat([rt24["src"], rt24["dst"]]))
     _flag(rt_accs, "Round-Trip")
-    print(f"  Signal 2 (Round-Trip):       {len(rt_accs):6,} accounts")
+    logger.info(f"  Signal 2 (Round-Trip):       {len(rt_accs):6,} accounts")
 
     # ── Signal 3: Structuring ────────────────────────────────────────────────
     # 3+ transactions within 1 hour where amounts cluster just below $10k or $50k.
@@ -109,7 +116,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     )
     s3_accs = s3[s3 >= 3].reset_index()["Account"].unique()
     _flag(s3_accs, "Structuring")
-    print(f"  Signal 3 (Structuring):      {len(s3_accs):6,} accounts")
+    logger.info(f"  Signal 3 (Structuring):      {len(s3_accs):6,} accounts")
 
     # ── Signal 4: Layering Velocity ──────────────────────────────────────────
     # Account receives funds then forwards ≥90% of the total within 6 hours.
@@ -130,7 +137,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     layer["ratio"] = layer["sent"] / layer["received"]
     s4_accs = layer[layer["ratio"] > 0.9]["Account"].unique()
     _flag(s4_accs, "Layering Velocity")
-    print(f"  Signal 4 (Layering Velocity):{len(s4_accs):6,} accounts")
+    logger.info(f"  Signal 4 (Layering Velocity):{len(s4_accs):6,} accounts")
 
     # ── Signal 5: Dormant Account Activation ────────────────────────────────
     # Account is silent in the first 24 hours of the window, then suddenly
@@ -160,7 +167,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     else:
         s5_accs = []
     _flag(s5_accs, "Dormant Activation")
-    print(f"  Signal 5 (Dormant Activation): {len(s5_accs):5,} accounts")
+    logger.info(f"  Signal 5 (Dormant Activation): {len(s5_accs):5,} accounts")
 
     # ── Signal 6: Currency Mismatch Layering ─────────────────────────────────
     # Accounts that receive funds in one currency set and forward in a different
@@ -182,7 +189,7 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     )
     s6_accs = cur_merge[cur_merge["mismatch"]]["Account"].unique()
     _flag(s6_accs, "Currency Mismatch")
-    print(f"  Signal 6 (Currency Mismatch):  {len(s6_accs):5,} accounts")
+    logger.info(f"  Signal 6 (Currency Mismatch):  {len(s6_accs):5,} accounts")
 
     # ── Signal 7: Smurfing ───────────────────────────────────────────────────
     # 5+ different accounts each send amounts between $1,000 and $10,000 to the
@@ -212,11 +219,11 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
                 all_senders |= row["Account"]
         _flag(list(all_senders), "Smurfing")
     s7_total = len(s7_dests) + len(all_senders if s7_dest_set else set())
-    print(f"  Signal 7 (Smurfing):           {s7_total:5,} accounts")
+    logger.info(f"  Signal 7 (Smurfing):           {s7_total:5,} accounts")
 
     # ── Score: keep accounts with ≥2 signals ────────────────────────────────
     account_signals = {acc: sigs for acc, sigs in flagged.items() if len(sigs) >= 2}
-    print(f"  Suspicious (≥2 signals):     {len(account_signals):6,} accounts")
+    logger.info(f"  Suspicious (≥2 signals):     {len(account_signals):6,} accounts")
 
     # ── Build G_unlabelled ───────────────────────────────────────────────────
     acc_set = set(account_signals.keys())
@@ -226,19 +233,21 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     )
     df_unlab = df_full[mask].copy()
     G_unlabelled = _build_graph(df_unlab)
-    print(f"  G_unlabelled: {G_unlabelled.number_of_nodes()} nodes, "
-          f"{G_unlabelled.number_of_edges()} edges")
+    logger.info(f"  G_unlabelled: {G_unlabelled.number_of_nodes()} nodes, "
+               f"{G_unlabelled.number_of_edges()} edges")
 
     return G_unlabelled, account_signals
 
 
 def _build_graph(df: pd.DataFrame) -> nx.DiGraph:
     G = nx.DiGraph()
-    for _, row in df.iterrows():
-        src = str(row["Account"])
-        dst = str(row["Account.1"])
+    if df.empty:
+        return G
+    cols = ["Account", "Account.1", "Amount Paid", "Timestamp",
+            "From Bank", "To Bank", "Payment Format", "Receiving Currency"]
+    for row in df[cols].to_dict("records"):
         G.add_edge(
-            src, dst,
+            str(row["Account"]), str(row["Account.1"]),
             amount_paid=float(row["Amount Paid"]),
             timestamp=row["Timestamp"],
             from_bank=str(row["From Bank"]),

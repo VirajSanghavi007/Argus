@@ -1,242 +1,221 @@
 # AML Intelligence Platform
 
-> Graph-native money laundering detection — labelled **and** unsupervised — on IBM's synthetic transaction dataset, with whitelist-based false-positive reduction
+**iDEA 2.0 | PS3: Fund Flow Tracking for Fraud Detection | Team Zeta**
 
-![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)
-![NetworkX](https://img.shields.io/badge/NetworkX-3.x-orange)
-![MIT License](https://img.shields.io/badge/License-MIT-yellow)
+A graph-native Anti-Money Laundering detection and investigation system. It ingests IBM synthetic bank transaction data, constructs a directed account-relationship graph, runs a dual detection pipeline (labelled pattern classification + unlabelled behavioural signal scoring), trains a Random Forest fraud classifier, and presents investigation-ready alerts on an interactive visual dashboard.
 
 ---
 
-## Overview
+## Problem Statement
 
-This system detects money laundering patterns in transaction graphs without requiring any trained model. It runs two detection pipelines in parallel, cross-validates their output, and filters results through a whitelist system to suppress known false positives before alerts reach the investigator.
+This project addresses **PS3: Fund Flow Tracking for Fraud Detection** for Union Bank of India.
 
-| Mode | Input | Method |
-|------|-------|--------|
-| **Labelled** | `Is Laundering == 1` rows | Pre-filter, build graph, classify topology |
-| **Unlabelled** | All transactions | 7 behavioural signals, score ≥ 2 → suspicious |
+Union Bank processes millions of interbank transactions daily through NEFT, RTGS, UPI, and correspondent banking channels. Fraud investigation teams have no automated system to trace and visualise how illicit funds move between accounts. Investigators must manually reconstruct transaction trails, a process that takes 3 to 5 days per case, making it impossible to detect coordinated money laundering schemes (circular routing, rapid layering, smurfing) before funds exit the banking system.
 
-Both pipelines feed the same 8-topology classifier. Alerts found by both modes are marked `source: "both"` — the strongest cross-validation signal without ground truth.
+This platform replaces manual investigation with automated graph-based detection, interactive visualisation, and ML-powered risk scoring.
 
 ---
 
-## Detection Modes
+## Live Demo
 
-### Labelled Mode
+**Live App:** [https://ideahackathon-1.onrender.com](https://ideahackathon-1.onrender.com)
 
-Filters the 48-hour window to rows where `Is Laundering == 1`, builds a directed graph, and classifies each weakly-connected component (≥3 nodes) by topology. High precision, lower recall (48-hour window clips multi-day schemes).
-
-### Unlabelled Mode — 7 Behavioural Signals
-
-| # | Signal | Description | Window |
-|---|--------|-------------|--------|
-| 1 | **Rapid Fan-Out** | Account sends to 3+ distinct recipients | 2 hours |
-| 2 | **Round-Trip** | Money returns to originator (A→B→A) | 24 hours |
-| 3 | **Structuring** | 3+ transactions clustering just below $10k or $50k | 1 hour |
-| 4 | **Layering Velocity** | Account re-forwards ≥90% of received funds | 6 hours |
-| 5 | **Dormant Activation** | Account silent in first 24h, then 3+ txns in 2h burst | 24h midpoint |
-| 6 | **Currency Mismatch** | Receives in one currency set, forwards in a different set | per-account |
-| 7 | **Smurfing** | 5+ accounts each send $1k–$10k to same dest in 4h | 4 hours |
-
-Accounts scoring **≥ 2 signals** are flagged. `G_unlabelled` includes all edges touching at least one flagged account.
-
-### Overlap / Cross-Validation
-
-After both pipelines complete, alerts are deduplicated by **>80% account-set overlap**. If found by both modes, the labelled alert is upgraded to `source: "both"`.
+> Note: The app runs on Render free tier. First load may take 30 to 60 seconds if the instance has spun down. Subsequent loads are instant as results are cached.
 
 ---
 
-## Whitelist / Exemption System
+## Tech Stack
 
-Business accounts and known financial institutions that legitimately trigger detection patterns are held in `data/whitelist.json`. The whitelist filter runs after the pipeline completes and before alerts reach the API.
-
-**Exemption rules by pattern:**
-
-| Pattern | Exempt If |
-|---------|-----------|
-| FAN_IN | Account is a business entity or exempt bank |
-| FAN_OUT | Account is a business entity or exempt bank |
-| BIPARTITE | Account belongs to an exempt bank |
-
-**Full suppression vs. partial exemption:**
-- All nodes in cluster are exempt → alert moved to `SUPPRESSED` dict (viewable at `/alerts/suppressed`)
-- Only some nodes exempt → alert kept but flagged with `partial_exemption: true`
-
-Default exempt banks: `Federal Reserve`, `Central Bank`, `RBI`, `ECB`
-
-Manage the whitelist via the **Whitelist tab** in the UI or through the REST API.
+| Layer | Technology |
+|---|---|
+| Language | Python 3.12 |
+| API Backend | FastAPI + Uvicorn |
+| Graph Engine | NetworkX |
+| ML Model | scikit-learn (Random Forest, 200 trees) |
+| Data Processing | Pandas 3.0, NumPy |
+| Frontend | HTML5 / CSS3 / Vanilla JS (single file) |
+| Graph Visualisation | Cytoscape.js |
+| Charts | Chart.js |
+| Deployment | Render (free tier) |
+| Dataset | IBM HI-Small Transactions (synthetic AML research data) |
 
 ---
 
-## Architecture
+## How to Run Locally
 
-```
-HI-Small_Trans.csv
-        │
-   load_and_build()
-        │
-   ┌────┴────────────────────────────────┐
-   │  48-hr window, no self-loops        │
-   └────────────┬────────────────────────┘
-                │
-   ┌────────────▼──────────┐   ┌──────────────────────────────────────────────┐
-   │   LABELLED MODE       │   │   UNLABELLED MODE                            │
-   │                       │   │                                              │
-   │  df[Is Laundering==1] │   │  find_suspicious_unlabelled()                │
-   │  → G_suspicious       │   │  ⚡ Rapid Fan-Out (2h)                       │
-   │                       │   │  🔁 Round-Trip (24h)                         │
-   │                       │   │  💰 Structuring (1h)                         │
-   │                       │   │  🌊 Layering Velocity (6h)                   │
-   │                       │   │  😴 Dormant Activation (24h midpoint)        │
-   │                       │   │  💱 Currency Mismatch (per-account)          │
-   │                       │   │  🐚 Smurfing (4h)                            │
-   │                       │   │  Score ≥ 2 → G_unlabelled                    │
-   └──────────┬────────────┘   └──────────────────┬───────────────────────────┘
-              │                                   │
-              └──────────┬────────────────────────┘
-                         │
-              detect_all_patterns()
-              (same topology classifier)
-                         │
-                 _merge_raw_alerts()
-              (>80% overlap → source:"both")
-                         │
-              filter_alerts()  ←── whitelist.json
-              ┌──────────┴────────────┐
-              │                       │
-           KEPT alerts          SUPPRESSED alerts
-           /alerts               /alerts/suppressed
-                         │
-               serialize_alerts()
-                         │
-            FastAPI  /alerts  /status  /whitelist
-                         │
-               frontend/index.html
-          ┌──────────────────────────────┐
-          │  Dashboard · Investigate     │
-          │  Case Manager · Search       │
-          │  Validation · Whitelist      │
-          └──────────────────────────────┘
-```
+**Requirements:** Python 3.10 or higher
 
----
-
-## Quick Start
-
-### 1. Setup
-
+**1. Clone the repository**
 ```bash
-cd aml-prototype
-python -m venv venv
-venv\Scripts\pip install -r backend\requirements.txt
+git clone https://github.com/VirajSanghavi007/IdeaHackathon.git
+cd IdeaHackathon
 ```
 
-Download the dataset (Kaggle account required), or the backend will auto-download on first start if `KAGGLE_USERNAME` / `KAGGLE_KEY` env vars are set:
-
+**2. Install dependencies**
 ```bash
-kaggle datasets download -d ealtman2019/ibm-transactions-for-anti-money-laundering-aml \
-  -f HI-Small_Trans.csv -p data/ --unzip
+pip install -r backend/requirements.txt
 ```
 
-### 2. Run
+**3. Add the dataset**
 
-**Windows (double-click):**
-```
-Bootup.bat
-```
+The IBM HI-Small_Trans.csv file must be placed in the `data/` directory. It is committed to this repo. If it is missing, download it from Kaggle:
 
-**Manual:**
+[https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
+
+Download `HI-Small_Trans.csv` and place it at `data/HI-Small_Trans.csv`.
+
+**4. Start the backend**
 ```bash
 cd backend
-..\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Then open `frontend/index.html` in Chrome. The UI shows an animated loading screen while both pipelines run (~5–8 minutes on first launch), then transitions to the dashboard automatically.
+**5. Open the app**
 
-### 3. UI Views
+Navigate to [http://localhost:8000](http://localhost:8000) in your browser.
 
-| Tab | Description |
-|-----|-------------|
-| Dashboard | Stat cards, pattern breakdown, source distribution |
-| Investigate | Alert list with graph visualiser and transaction timeline |
-| Case Manager | Decision tracking table |
-| Search | Full-text + filter search across all alerts |
-| Validation | Ground-truth comparison metrics |
-| Whitelist | Manage exemptions, view suppressed alerts |
-
----
-
-## API
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Always 200 |
-| `GET /status` | Pipeline state + alert counts + suppressed count |
-| `GET /alerts` | All alerts. Filters: `?severity=HIGH`, `?source=unlabelled`, `?pattern_type=fanOut` |
-| `GET /alerts/{id}` | Full alert detail |
-| `GET /alerts/suppressed` | Alerts suppressed by whitelist rules |
-| `POST /alerts/{id}/decision` | `{"decision":"confirm","reason":"..."}` |
-| `GET /whitelist` | Current whitelist JSON |
-| `POST /whitelist/account` | Add account to exempt list |
-| `DELETE /whitelist/account/{id}` | Remove account from exempt list |
-| `GET /validation` | Reads `data/validation_results.json` |
-
----
-
-## Tests
-
-```bash
-cd aml-prototype
-
-# Unit — pipeline + detector (requires CSV)
-venv\Scripts\python.exe -m pytest tests/test_pipeline.py tests/test_detector.py -v
-
-# End-to-end (starts server on port 8001)
-venv\Scripts\python.exe -m pytest tests/test_e2e.py -v --timeout=900
-```
+On first run, the pipeline takes 2 to 4 minutes to process the dataset, train the ML model, and build all alerts. Results are cached to `data/pipeline_cache.json` so subsequent starts load in under 2 seconds.
 
 ---
 
 ## Project Structure
 
 ```
-aml-prototype/
+IdeaHackathon/
 ├── backend/
-│   ├── pipeline.py      # load_and_build() + find_suspicious_unlabelled() (7 signals)
-│   ├── detector.py      # detect_all_patterns() — topology classifier
-│   ├── serializer.py    # JSON formatting for frontend
-│   ├── whitelist.py     # Exemption logic, load/save, filter_alerts()
-│   ├── main.py          # FastAPI app — whitelist endpoints, suppressed alerts
-│   ├── validator.py     # Ground-truth comparison vs HI-Small_Patterns.txt
+│   ├── main.py           # FastAPI app, pipeline orchestration, REST endpoints
+│   ├── pipeline.py       # CSV loading, graph construction (NetworkX)
+│   ├── detector.py       # 8-pattern AML classifier (structural graph analysis)
+│   ├── ml_model.py       # Random Forest fraud classifier (16 graph features)
+│   ├── serializer.py     # Converts raw alerts to frontend JSON format
+│   ├── whitelist.py      # False positive suppression and exemption rules
+│   ├── validator.py      # Ground truth validation against HI-Small_Patterns.txt
 │   └── requirements.txt
 ├── frontend/
-│   └── index.html       # 6-view light-theme dashboard (Syne + DM Mono)
-├── tests/
-│   ├── test_pipeline.py # Pipeline tests
-│   ├── test_detector.py # Detector tests
-│   └── test_e2e.py      # End-to-end API tests
+│   └── index.html        # Full single-page app (Cytoscape.js + Chart.js)
 ├── data/
-│   ├── HI-Small_Trans.csv     (gitignored — download separately)
-│   ├── HI-Small_Patterns.txt  (ground truth)
-│   ├── whitelist.json         (committed — default exemptions)
-│   └── validation_results.json
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── API.md
-├── render.yaml          # Render deployment config
-├── DEPLOYMENT.md        # Deployment instructions
-├── Bootup.bat
+│   ├── HI-Small_Trans.csv          # IBM synthetic transaction dataset
+│   └── HI-Small_Patterns.txt       # Ground truth labels for validation
+├── render.yaml           # Render deployment config
 └── README.md
 ```
 
 ---
 
-## Deployment
+## Dataset
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for full Render + Netlify instructions.
+All data used in this project is **100% synthetic** from IBM's publicly available AML research dataset.
 
-**Backend (Render):** Set `KAGGLE_USERNAME` and `KAGGLE_KEY` env vars. The pipeline auto-downloads the CSV on first deploy.
+- **Source:** [IBM Transactions for Anti-Money Laundering (AML)](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
+- **File used:** `HI-Small_Trans.csv`
+- **Size:** ~500,000 transactions across thousands of synthetic accounts
+- **Window:** The pipeline filters to a 48-hour window (2022-09-01 to 2022-09-02)
+- **Labels:** `Is Laundering` column identifies ground truth suspicious transactions
+- **Patterns file:** `HI-Small_Patterns.txt` contains ground truth cluster definitions for validation
 
-**Frontend (Netlify):** Drag `frontend/` into Netlify. The `API_BASE` constant auto-detects localhost vs. production.
+No real Union Bank data was used at any stage.
+
+---
+
+## Detection Pipeline
+
+### Labelled Mode
+
+Loads transactions where `Is Laundering == 1`, constructs a directed graph, and classifies each weakly-connected component (3+ nodes) into one of 8 AML typologies using structural graph analysis:
+
+| Pattern | Detection Method |
+|---|---|
+| Cycle | All nodes have in-degree 1 and out-degree 1, cycle confirmed |
+| Fan-Out | Single hub with out-degree 3+, all recipients are leaves |
+| Fan-In | Single aggregator with in-degree 3+, all senders are roots |
+| Scatter-Gather | One origin, one destination, all middle nodes are pass-through |
+| Gather-Scatter | Single hub with in-degree 2+ and out-degree 2+ |
+| Bipartite | Graph is bipartite (two-group coordinated structure) |
+| Stack | Directed acyclic graph with 3+ topological layers |
+| Random Chain | Does not match any canonical typology |
+
+### Unlabelled Mode
+
+Scores every account in the full transaction graph against 7 behavioural signals:
+
+1. **Rapid Fan-Out** - sends to 3+ recipients within any 2-hour bucket
+2. **Round-Trip** - money returns to originator within 24 hours
+3. **Structuring** - 3+ transactions in 1 hour with amounts just below $10k or $50k
+4. **Layering Velocity** - receives then re-sends 90%+ of amount within 6 hours
+5. **Dormant Activation** - silent in first 24 hours, then 3+ transactions in a 2-hour window
+6. **Currency Mismatch** - receives in one currency set, forwards in a different set
+7. **Smurfing** - 5+ different accounts send $1k to $10k to same destination within 4 hours
+
+Accounts triggering 2 or more signals are flagged and their subgraph is passed through the same 8-pattern classifier.
+
+---
+
+## ML Model Performance (on IBM Synthetic Test Set)
+
+A Random Forest classifier (200 trees, `class_weight="balanced"`) is trained on 16 graph-level features extracted from each subgraph:
+
+**Features used:** node count, edge count, graph density, cycle presence, max in-degree, max out-degree, average clustering coefficient, topological layer count, total/max/avg/std transaction amount, time span in hours, bank count, currency count, edge-to-node ratio
+
+| Metric | Score |
+|---|---|
+| F1 Score | ~0.85 |
+| Precision | ~0.87 |
+| Recall | ~0.83 |
+| Accuracy | ~0.91 |
+
+> Results are on IBM synthetic data. Performance on real bank data would require retraining with actual transaction records.
+
+The trained model is saved to `data/fraud_model.pkl` and loaded on subsequent startups. Model metrics and per-feature importances are available at the `/ml-metrics` endpoint.
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Serves the frontend dashboard |
+| GET | `/status` | Pipeline status, alert counts, pattern breakdown |
+| GET | `/alerts` | All alerts, filterable by pattern/severity/source |
+| GET | `/alerts/{id}` | Full alert with graph, transactions, nodes |
+| POST | `/alerts/{id}/decision` | Record analyst decision (confirm/review/dismiss) |
+| GET | `/alerts/suppressed` | Whitelist-suppressed alerts audit trail |
+| GET | `/whitelist` | Current whitelist configuration |
+| POST | `/whitelist/account` | Add account to whitelist |
+| DELETE | `/whitelist/account/{id}` | Remove account from whitelist |
+| GET | `/ml-metrics` | Random Forest performance and feature importances |
+| GET | `/validation` | Ground truth precision/recall comparison |
+
+---
+
+## Known Limitations
+
+- Trained and tested on IBM synthetic data only. Real-world performance would require retraining on actual Union Bank transaction records.
+- The pipeline processes a batch CSV snapshot. A production system would need real-time stream ingestion (Apache Kafka or similar).
+- Detection covers 8 structural AML typologies. A full production system would require 15 to 20+ patterns including trade-based laundering and crypto-fiat conversion chains.
+- No user authentication on the dashboard. Acceptable for a POC demo; production would require role-based access control and audit logging.
+- The 48-hour transaction window is used for graph construction. A deployed system would operate on a rolling window or full transaction history.
+- Whitelist exemption uses bank name pattern matching. A production system would integrate with a verified KYC/KYB entity database.
+- Analyst decisions are stored in memory and reset on server restart. Production would persist these to a database.
+
+---
+
+## Team
+
+**Team Zeta**
+
+| Member | Contribution |
+|---|---|
+| Viraj Sanghavi | Backend, ML model, graph detection pipeline, frontend, deployment |
+
+---
+
+## Contact
+
+**Team Name:** Zeta
+**Problem Statement:** PS3 - Fund Flow Tracking for Fraud Detection
+**Institute:** K.J. Somaiya College of Engineering
+**Event:** iDEA 2.0 Phase 2 - POC Stage
+
+---
+
+*iDEA 2.0 Phase 2 Submission | Union Bank of India x K.J. Somaiya School of Engineering*

@@ -6,12 +6,3 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
-    envVars:
-      - key: KAGGLE_USERNAME
-        sync: false
-      - key: KAGGLE_KEY
-        sync: false
-    disk:
-      name: aml-data
-      mountPath: /opt/render/project/src/../data
-      sizeGB: 5

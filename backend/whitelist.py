@@ -29,6 +29,26 @@ DEFAULT_WHITELIST: dict = {
             "reason": "Correspondent banking relationships",
             "exempt_if": ["is_exempt_bank"],
         },
+        "CYCLE": {
+            "reason": "Internal treasury recycling between affiliated entities",
+            "exempt_if": ["is_business", "is_exempt_bank"],
+        },
+        "SCATTER_GATHER": {
+            "reason": "Legitimate payment aggregation and redistribution",
+            "exempt_if": ["is_business", "is_exempt_bank"],
+        },
+        "GATHER_SCATTER": {
+            "reason": "Clearing house or settlement hub operations",
+            "exempt_if": ["is_exempt_bank"],
+        },
+        "STACK": {
+            "reason": "Multi-tier corporate fund routing (holding structures)",
+            "exempt_if": ["is_business", "is_exempt_bank"],
+        },
+        "RANDOM": {
+            "reason": "Unstructured activity from known low-risk entities",
+            "exempt_if": ["is_exempt_bank"],
+        },
     },
 }
 

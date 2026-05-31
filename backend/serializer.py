@@ -29,7 +29,7 @@ def _fmt_ts(ts) -> str:
         return ""
     try:
         return ts.strftime("%Y-%m-%d %H:%M")
-    except Exception:
+    except (AttributeError, ValueError):
         return str(ts)
 
 
@@ -99,6 +99,7 @@ def serialize_alerts(alert_dicts: list[dict]) -> list[dict]:
             "sub":              a["sub"],
             "severity":         a["severity"],
             "confidence":       a["confidence"],
+            "mlScore":          a.get("ml_score", None),
             "patternType":      PATTERN_CAMEL.get(pattern, pattern.lower()),
             "timeSpan":         a["time_span"],
             "hops":             a["hops"],

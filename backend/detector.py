@@ -1,6 +1,9 @@
+import logging
 import networkx as nx
 import pandas as pd
 from typing import Any
+
+logger = logging.getLogger("uvicorn.error")
 
 
 SEVERITY_WEIGHT = {
@@ -69,8 +72,8 @@ def _classify(sub: nx.DiGraph) -> str:
             gens = list(nx.topological_generations(sub))
             if len(gens) >= 3:
                 return "STACK"
-        except Exception:
-            pass
+        except nx.NetworkXError as exc:
+            logger.warning("topological_generations failed: %s", exc)
 
     return "RANDOM"
 
@@ -174,13 +177,13 @@ def _compute_hops(sub: nx.DiGraph, pattern: str) -> int:
     if pattern == "CYCLE":
         try:
             return len(nx.find_cycle(sub))
-        except Exception:
+        except nx.NetworkXNoCycle:
             return len(sub.nodes())
     if nx.is_directed_acyclic_graph(sub):
         try:
             return nx.dag_longest_path_length(sub)
-        except Exception:
-            pass
+        except nx.NetworkXError as exc:
+            logger.warning("dag_longest_path_length failed: %s", exc)
     return len(sub.nodes()) - 1
 
 
@@ -291,8 +294,8 @@ def _route_nodes(sub: nx.DiGraph, roles: dict) -> list:
     if nx.is_directed_acyclic_graph(sub):
         try:
             return list(nx.dag_longest_path(sub))
-        except Exception:
-            pass
+        except nx.NetworkXError as exc:
+            logger.warning("dag_longest_path failed: %s", exc)
     # For cycles and others, return nodes sorted by out_degree desc
     return sorted(sub.nodes(), key=lambda v: sub.out_degree(v), reverse=True)
 
@@ -384,7 +387,7 @@ def detect_all_patterns(
                 "payment_format": d.get("payment_format", ""),
                 "receiving_currency": d.get("receiving_currency", ""),
             })
-        raw_edges.sort(key=lambda e: e["timestamp"] if e["timestamp"] is not None else pd.Timestamp.min)
+        raw_edges.sort(key=lambda e: (e["timestamp"] is None, e["timestamp"]))
         edges_list = [{ **e, "txIdx": idx } for idx, e in enumerate(raw_edges)]
 
         # transactions_list filtered to accounts in this component
