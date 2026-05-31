@@ -862,6 +862,7 @@ function showView(name) {
   if (name === 'dashboard')   renderDashboard();
   if (name === 'investigate') { renderSidebar(); if (!currentAlert && allAlerts.length) loadAlertById(allAlerts[0].id); }
   if (name === 'cases')       renderCaseManager();
+  if (name === 'search')      runSearch('', 'all');
   if (name === 'validation')  loadValidation();
   if (name === 'whitelist')   loadWhitelist();
 }
@@ -1443,56 +1444,91 @@ function exportCSV() {
    SEARCH
 ════════════════════════════════════════════ */
 function doSearch() {
-  const q=(document.getElementById('search-inp').value||'').toLowerCase().trim();
-  runSearch(q);
+  const q = (document.getElementById('search-inp').value||'').trim();
+  // Clear any active filter pill
+  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  runSearch(q, 'auto');
 }
+
 function qFilter(val, type='pat') {
-  // Show the formatted display name in the input but search by raw camelCase patternType
   const patDisplayMap = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
     gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK',
   };
-  document.getElementById('search-inp').value = (type==='pat' && patDisplayMap[val]) ? patDisplayMap[val] : val;
+  // Highlight the active pill
+  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  // Show formatted name in input, clear it for sev/src filters
+  document.getElementById('search-inp').value = (type==='pat' && patDisplayMap[val]) ? patDisplayMap[val] : '';
   runSearch(val, type);
 }
+
+// Normalise a string for fuzzy matching: lowercase, replace hyphens/underscores/spaces
+function normStr(s) { return String(s).replace(/[-_\s]/g,'').toLowerCase(); }
+
 function runSearch(q, type='auto') {
   const container = document.getElementById('search-results');
-  if (!q) { container.innerHTML=`<div class="search-empty">Enter a search term above</div>`; return; }
-  const res = allAlerts.filter(a => {
-    if (type==='sev') return a.severity === q.toUpperCase();
-    if (type==='src') return a.source === q;
-    // Bug 1 fix: for pattern filters use direct camelCase patternType comparison
-    // normalise both sides with underscores to handle any FAN_IN / FAN-IN mismatch
-    if (type==='pat') {
-      const norm = s => String(s).replace(/-/g,'_').toLowerCase();
-      return norm(a.patternType) === norm(q);
-    }
-    // Free-text search across id, pattern name, sub description, nodes, banks
-    const lq  = q.toLowerCase();
-    const det = alertDetails[a.id];
-    const nodes = (det ? det.nodes.map(n => n.id).join(' ') : '') || '';
-    const banks = (det ? det.nodes.map(n => getBankName(n.bank||'')).join(' ') : '') || '';
-    return formatPatternName(a.patternType).toLowerCase().includes(lq) ||
-      a.id.toLowerCase().includes(lq) ||
-      (a.sub||'').toLowerCase().includes(lq) ||
-      nodes.toLowerCase().includes(lq) ||
-      banks.toLowerCase().includes(lq);
-  });
-  if (!res.length) { container.innerHTML=`<div class="search-empty">No alerts match "${q}"</div>`; return; }
-  container.innerHTML = res.map(a => {
-    // Bug 2 fix: always use the top-level patternType field for the card title
+
+  // type='all' — show everything (used when opening the tab)
+  let res;
+  if (type === 'all' || (!q && type !== 'sev' && type !== 'src' && type !== 'pat')) {
+    res = allAlerts.slice();
+  } else {
+    const lq = q.toLowerCase().trim();
+    res = allAlerts.filter(a => {
+      if (type === 'sev') return a.severity === lq.toUpperCase();
+      if (type === 'src') return a.source === lq;
+      if (type === 'pat') {
+        // Direct patternType match — normalise both sides so fanIn/FAN-IN/fan_in all work
+        return normStr(a.patternType) === normStr(lq);
+      }
+      // Free-text: normalise query so "fan in" / "fan-in" / "fanin" all match
+      const nq = normStr(lq);
+      const det = alertDetails[a.id];
+      const nodes = (det ? det.nodes.map(n => n.id).join(' ') : '') || '';
+      const banks = (det ? det.nodes.map(n => getBankName(n.bank||'')).join(' ') : '') || '';
+      return normStr(formatPatternName(a.patternType)).includes(nq) ||
+        normStr(a.name||'').includes(nq) ||
+        a.id.toLowerCase().includes(lq) ||
+        (a.sub||'').toLowerCase().includes(lq) ||
+        nodes.toLowerCase().includes(lq) ||
+        banks.toLowerCase().includes(lq);
+    });
+  }
+
+  if (!res.length) {
+    container.innerHTML = `<div class="search-empty">No alerts match "${q}"</div>`;
+    return;
+  }
+
+  // Result count header + cards
+  const header = `<div style="grid-column:1/-1;font-family:var(--mono);font-size:11px;
+    color:var(--muted);margin-bottom:4px">${res.length} alert${res.length!==1?'s':''} found</div>`;
+
+  const cards = res.map(a => {
+    // Always use a.name (set by serializer from PATTERN_NAME) for the card title
     const patLabel = a.name || formatPatternName(a.patternType);
+    const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
+    const mlBg  = mlPct != null ? (mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)') : '';
+    const mlClr = mlPct != null ? (mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)') : '';
+    const mlBd  = mlPct != null ? (mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)') : '';
     return `
-    <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]}" onclick="jumpInvestigate('${a.id}')">
-      <div style="font-family:var(--sans);font-weight:700;margin-bottom:6px">${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}</div>
+    <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
+         onclick="jumpInvestigate('${a.id}')">
+      <div style="font-family:var(--sans);font-weight:700;font-size:13px;margin-bottom:6px;color:var(--text)">
+        ${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}
+      </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
+        ${mlPct!=null?`<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>`:''}
       </div>
-      <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${a.sub||''}</div>
-      <div style="font-size:11px;margin-top:6px;font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">${a.sub||''}</div>
+      <div style="font-size:11px;color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
     </div>`;
   }).join('');
+
+  container.innerHTML = header + cards;
 }
 
 /* ════════════════════════════════════════════
