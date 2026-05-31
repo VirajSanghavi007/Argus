@@ -325,6 +325,54 @@ def get_ml_metrics():
 @app.get("/validation")
 def get_validation():
     results_path = DATA_DIR / "validation_results.json"
-    if not results_path.exists():
-        raise HTTPException(status_code=404, detail="Validation not run yet")
-    return json.loads(results_path.read_text(encoding="utf-8"))
+    if results_path.exists():
+        return json.loads(results_path.read_text(encoding="utf-8"))
+
+    if not PIPELINE_READY.is_set() or not ALERTS:
+        raise HTTPException(status_code=503, detail="Pipeline not ready yet")
+
+    from validator import _parse_patterns, _validate_alert_set
+    from collections import defaultdict
+
+    patterns_path = DATA_DIR / "HI-Small_Patterns.txt"
+    if not patterns_path.exists():
+        raise HTTPException(status_code=404, detail="HI-Small_Patterns.txt not found in data/")
+
+    ground_truth = _parse_patterns(patterns_path)
+
+    all_alerts      = list(ALERTS.values())
+    labelled_ser    = [a for a in all_alerts if a.get("source") in ("labelled", "both")]
+    unlabelled_ser  = [a for a in all_alerts if a.get("source") in ("unlabelled", "both")]
+
+    lab_metrics   = _validate_alert_set(labelled_ser,   ground_truth)
+    unlab_metrics = _validate_alert_set(unlabelled_ser, ground_truth)
+
+    lab_sets = [frozenset(n["id"] for n in a["nodes"]) for a in labelled_ser]
+    overlap_count = 0
+    for u in unlabelled_ser:
+        u_set = frozenset(n["id"] for n in u["nodes"])
+        for l_set in lab_sets:
+            denom = max(len(u_set), len(l_set))
+            if denom and len(u_set & l_set) / denom > 0.8:
+                overlap_count += 1
+                break
+
+    results = {
+        "total_gt_blocks": len(ground_truth),
+        "labelled":        lab_metrics,
+        "unlabelled":      unlab_metrics,
+        "overlap_count":   overlap_count,
+        "comparison": {
+            "labelled_alerts":      len(labelled_ser),
+            "unlabelled_alerts":    len(unlabelled_ser),
+            "overlap_count":        overlap_count,
+            "labelled_precision":   lab_metrics["overall_precision"],
+            "labelled_recall":      lab_metrics["overall_recall"],
+            "unlabelled_precision": unlab_metrics["overall_precision"],
+            "unlabelled_recall":    unlab_metrics["overall_recall"],
+        },
+    }
+
+    results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    logger.info(f"Validation results computed and saved to {results_path}")
+    return results
