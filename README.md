@@ -158,10 +158,10 @@ A Random Forest classifier (200 trees, `class_weight="balanced"`) is trained on 
 
 | Metric | Score |
 |---|---|
-| F1 Score | ~0.85 |
-| Precision | ~0.87 |
-| Recall | ~0.83 |
-| Accuracy | ~0.91 |
+| F1 Score | ~0.67 |
+| Precision | ~0.83 |
+| Recall | ~0.56 |
+| Accuracy | ~0.86 |
 
 > Results are on IBM synthetic data. Performance on real bank data would require retraining with actual transaction records.
 
@@ -206,9 +206,9 @@ The trained model is saved to `data/fraud_model.pkl` and loaded on subsequent st
 | Member | Contribution |
 |---|---|
 | Viraj   | Backend, ML model, graph detection pipeline, frontend, deployment |
-| Sonal   | |
-| Archit  | |
-| Suruchi | |
+| Sonal   | Domain research, Union Bank problem analysis, D1 problem brief, documentation|
+| Archit  | Data analysis, IBM dataset exploration, detection signal design, validation testing|
+| Suruchi | UI/UX design, frontend testing, demo video, pitch deck and presentation|
 
 ---
 
