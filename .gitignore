@@ -52,3 +52,4 @@ build/
 # pipeline_cache.json and fraud_model.pkl are intentionally committed
 # pipeline_cache.json slimmed to ~20MB (transactions capped at 150/alert)
 # fraud_model.pkl is ~648KB
+data/*.csv
