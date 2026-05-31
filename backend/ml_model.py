@@ -1,7 +1,10 @@
 import logging
 import pickle
 import random
+import warnings
 import numpy as np
+
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
 import pandas as pd
 import networkx as nx
 from pathlib import Path

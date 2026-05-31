@@ -990,7 +990,10 @@ function renderSidebar() {
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
     const conf   = Math.round((a.confidence||0)*100);
     const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
-    const mlBadge= mlPct != null ? `<span class="badge" style="background:${mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)';};color:${mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)'};border:1px solid ${mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)'}">ML ${mlPct}%</span>` : '';
+    const mlBg  = mlPct>=70 ? 'var(--red-bg)'   : mlPct>=40 ? 'var(--amber-bg)'  : 'var(--green-bg)';
+    const mlClr = mlPct>=70 ? 'var(--red)'      : mlPct>=40 ? 'var(--amber)'     : 'var(--green)';
+    const mlBd  = mlPct>=70 ? 'var(--red-bd)'   : mlPct>=40 ? 'var(--amber-bd)'  : 'var(--green-bd)';
+    const mlBadge = mlPct != null ? `<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>` : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')">
       ${decDot}
       <div class="ac-name">${formatPatternName(a.patternType)}</div>
