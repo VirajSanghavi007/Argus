@@ -48,3 +48,6 @@ build/
 
 # Logs
 *.log
+
+data/pipeline_cache.json
+data/fraud_model.pkl
