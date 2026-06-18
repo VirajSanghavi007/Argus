@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "elicit": {
-      "type": "url",
-      "url": "https://elicit.com/api/mcp"
+    "semantic-scholar": {
+      "command": "semantic-scholar-mcp",
+      "args": []
     }
   }
 }
