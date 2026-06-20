@@ -5,11 +5,19 @@ from pathlib import Path
 
 logger   = logging.getLogger("uvicorn.error")
 DATA_DIR = Path(__file__).parent.parent / "data"
-CSV_PATH = DATA_DIR / "HI-Small_Trans.csv"
 
-WINDOW_START = pd.Timestamp("2022-09-01 00:00")
-WINDOW_END   = pd.Timestamp("2022-09-02 23:59")
+# Prefer IBM subdirectory; fall back to data/ root for backwards compatibility
+def _resolve_csv() -> Path:
+    candidates = [
+        DATA_DIR / "IBM" / "HI-Small_Trans.csv",
+        DATA_DIR / "HI-Small_Trans.csv",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]  # pipeline will raise FileNotFoundError with clear message
 
+CSV_PATH = _resolve_csv()
 
 def load_and_build():
     if not CSV_PATH.exists():
@@ -24,8 +32,7 @@ def load_and_build():
     df.sort_values("Timestamp", inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    df = df[(df["Timestamp"] >= WINDOW_START) & (df["Timestamp"] <= WINDOW_END)]
-    logger.info(f"48-hr window: {len(df)} rows")
+    logger.info(f"Full dataset: {len(df)} rows")
 
     # Remove self-loops (Reinvestment rows)
     df = df[df["Account"] != df["Account.1"]].copy()
@@ -140,9 +147,11 @@ def find_suspicious_unlabelled(df_full: pd.DataFrame):
     logger.info(f"  Signal 4 (Layering Velocity):{len(s4_accs):6,} accounts")
 
     # ── Signal 5: Dormant Account Activation ────────────────────────────────
-    # Account is silent in the first 24 hours of the window, then suddenly
-    # sends or receives 3+ transactions within any 2-hour bucket in hours 24-48.
-    MIDPOINT = WINDOW_START + pd.Timedelta(hours=24)
+    # Account is silent in the first half of the dataset window, then suddenly
+    # sends or receives 3+ transactions within any 2-hour bucket in the second half.
+    ts_min   = df_full["Timestamp"].min()
+    ts_max   = df_full["Timestamp"].max()
+    MIDPOINT = ts_min + (ts_max - ts_min) / 2
     df_before = df_full[df_full["Timestamp"] < MIDPOINT]
     df_after  = df_full[df_full["Timestamp"] >= MIDPOINT]
 

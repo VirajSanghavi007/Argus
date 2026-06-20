@@ -100,6 +100,10 @@ def serialize_alerts(alert_dicts: list[dict]) -> list[dict]:
             "severity":         a["severity"],
             "confidence":       a["confidence"],
             "mlScore":          a.get("ml_score", None),
+            "mlScoreRF":        a.get("ml_score_rf", None),
+            "mlScoreGNN":       a.get("ml_score_gnn", None),
+            "riskFlagged":      a.get("risk_flagged", False),
+            "patternMlConf":    a.get("pattern_ml_conf", None),
             "patternType":      PATTERN_CAMEL.get(pattern, pattern.lower()),
             "timeSpan":         a["time_span"],
             "hops":             a["hops"],
@@ -107,6 +111,7 @@ def serialize_alerts(alert_dicts: list[dict]) -> list[dict]:
             "routeNodes":       [str(v) for v in a["route_nodes"]],
             "description":      a["description"],
             "nodes":            nodes,
+            "nodes_list":       a["nodes_list"],   # kept for internal retrainer use
             "edges":            edges,
             "transactions":     transactions,
             "source":           a.get("source", "labelled"),

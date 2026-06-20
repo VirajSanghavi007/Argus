@@ -5,6 +5,19 @@ from typing import Any
 
 logger = logging.getLogger("uvicorn.error")
 
+# Phase 3 — ML pattern classifier (optional; falls back to rules if not trained)
+_PATTERN_MODEL = None
+try:
+    from pattern_classifier import load_pattern_classifier, classify_subgraph_ml
+    _loaded = load_pattern_classifier()
+    if _loaded is not None:
+        _PATTERN_MODEL = _loaded
+        logger.info("ML pattern classifier loaded.")
+    else:
+        logger.info("ML pattern classifier not trained yet — using rule-based fallback.")
+except Exception as _e:
+    logger.info(f"ML pattern classifier unavailable ({_e}) — using rule-based fallback.")
+
 
 SEVERITY_WEIGHT = {
     "SCATTER_GATHER": 1.0, "GATHER_SCATTER": 1.0, "STACK": 1.0, "BIPARTITE": 1.0,
@@ -329,7 +342,22 @@ def detect_all_patterns(
 
     for comp in components:
         sub = G.subgraph(comp).copy()
-        pattern = _classify(sub)
+
+        # Try ML classifier first; fall back to rules if unavailable or low confidence
+        ml_pattern_conf = None
+        if _PATTERN_MODEL is not None:
+            try:
+                ml_pat, ml_conf = classify_subgraph_ml(sub, _PATTERN_MODEL)
+                if ml_conf >= 0.5:
+                    pattern = ml_pat
+                    ml_pattern_conf = ml_conf
+                else:
+                    pattern = _classify(sub)
+            except Exception:
+                pattern = _classify(sub)
+        else:
+            pattern = _classify(sub)
+
         roles, sevs = _assign_roles(sub, pattern)
 
         ts_list = _get_edge_timestamps(sub)
@@ -407,6 +435,7 @@ def detect_all_patterns(
             "pattern_type":      pattern,
             "severity":          SEV_LABEL.get(pattern, "LOW"),
             "confidence":        conf,
+            "pattern_ml_conf":   round(ml_pattern_conf, 4) if ml_pattern_conf is not None else None,
             "total_moved":       moved,
             "time_span":         time_span_str,
             "hops":              hops,
