@@ -171,8 +171,8 @@ IdeaHackathon/
 |   |-- index.html              Dashboard markup
 |   |-- style.css               Dashboard styles
 |   `-- app.js                  Dashboard behaviour and API client
-|-- tests/                      Pipeline, detector, and end-to-end tests
-|-- docs/                       Architecture and API notes
+|-- tests/                      Dataset-backed integration tests
+|-- AML_RESEARCH_FINDINGS.md    Background domain research
 |-- run_benchmarks.ps1          Benchmark helper
 |-- Bootup.bat                  Windows startup helper
 `-- render.yaml                 Render deployment configuration
@@ -190,12 +190,6 @@ Run the broader pipeline tests when the dataset is available:
 
 ```bash
 pytest tests/test_pipeline.py tests/test_detector.py -v
-```
-
-The end-to-end suite starts an API server and runs the complete pipeline, so it can take several minutes:
-
-```bash
-pytest tests/test_e2e.py -v
 ```
 
 ## Benchmarking
@@ -230,7 +224,4 @@ Team Zeta, K. J. Somaiya College of Engineering
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [API reference](docs/API.md)
-- [Deployment guide](DEPLOYMENT.md)
-- [AML research findings](AML_RESEARCH_FINDINGS.md)
+This README is the canonical technical overview for the current architecture. Background research remains available in [AML_RESEARCH_FINDINGS.md](AML_RESEARCH_FINDINGS.md).
