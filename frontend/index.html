@@ -7,492 +7,133 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/style.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-/* ── Design tokens ── */
-:root{
-  /* brand */
-  --blue:   #2563EB; --blue-bg:  #EFF6FF; --blue-bd:  #BFDBFE;
-  --purple: #7C3AED; --purple-bg:#F5F3FF; --purple-bd:#DDD6FE;
-  --amber:  #D97706; --amber-bg: #FFFBEB; --amber-bd: #FDE68A;
-  --green:  #059669; --green-bg: #ECFDF5; --green-bd: #A7F3D0;
-  --teal:   #0891B2; --teal-bg:  #ECFEFF; --teal-bd:  #A5F3FC;
-  --red:    #DC2626; --red-bg:   #FEF2F2; --red-bd:   #FECACA;
-  /* neutrals */
-  --bg:      #F8FAFC;
-  --surface: #FFFFFF;
-  --card:    #FFFFFF;
-  --row-alt: #F8FAFC;
-  --border:  #CBD5E1;
-  --border-lt:#E2E8F0;
-  --text:    #0F172A;
-  --muted:   #475569;
-  --light:   #94A3B8;
-  /* fonts */
-  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --mono: 'DM Mono', 'Courier New', monospace;
-  --r:4px;
-}
-body.dark{
-  --blue-bg:#1E3A5F; --blue-bd:#2563EB;
-  --purple-bg:#2D1B69; --purple-bd:#7C3AED;
-  --amber-bg:#3D2A00; --amber-bd:#D97706;
-  --green-bg:#052E16; --green-bd:#059669;
-  --teal-bg:#0C2B33; --teal-bd:#0891B2;
-  --red-bg:#2D0A0A; --red-bd:#DC2626;
-  --bg:      #0F172A;
-  --surface: #1E293B;
-  --card:    #1E293B;
-  --row-alt: #162032;
-  --border:  #334155;
-  --border-lt:#1E293B;
-  --text:    #F1F5F9;
-  --muted:   #94A3B8;
-  --light:  #475569;
-}
-
-/* ── Dark mode overrides for all hardcoded #fff / #F8FAFC elements ── */
-body.dark nav,
-body.dark .inv-left,
-body.dark .inv-right,
-body.dark .inv-timeline,
-body.dark .inv-stats-strip,
-body.dark .route-bar,
-body.dark .db-chart-card,
-body.dark .timeline-card,
-body.dark .stage-card,
-body.dark .ac,
-body.dark .route-pill,
-body.dark .graph-btn,
-body.dark #tooltip,
-body.dark .table-wrap,
-body.dark .search-card,
-body.dark .wl-panel,
-body.dark .suppressed-section,
-body.dark .toast,
-body.dark .btn-ghost,
-body.dark #loading-overlay
-{ background: var(--surface) !important; }
-
-body.dark .nav-tab:hover { background: var(--bg) !important; }
-body.dark #cy            { background: #0D1B2A !important; }
-body.dark .wl-account-item,
-body.dark .wl-rule-item  { background: var(--bg) !important; }
-
-body.dark input[type=text],
-body.dark input[type=search],
-body.dark select,
-body.dark textarea
-{ background: var(--bg) !important; color: var(--text) !important; }
-
-body.dark .filter-pill   { background: var(--bg) !important; }
-body.dark ::-webkit-scrollbar-track { background: var(--surface); }
-
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--mono);background:var(--bg);color:var(--text);
-  height:100vh;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
-label,h1,h2,h3,h4,.label-up{font-family:var(--sans)}
-
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:#F1F5F9}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-
-/* ── Navbar ── */
-nav{background:#fff;border-bottom:1px solid var(--border);
-  height:56px;display:flex;align-items:center;padding:0 24px;gap:32px;
-  flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.nav-brand{display:flex;flex-direction:column;gap:1px;min-width:0}
-.nav-title{font-family:var(--sans);font-weight:700;font-size:15px;color:var(--text);white-space:nowrap}
-.nav-sub{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.04em}
-.nav-tabs{display:flex;gap:0;flex:1}
-.nav-tab{padding:0 16px;height:56px;display:flex;align-items:center;cursor:pointer;
-  font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--muted);border:none;background:none;
-  border-bottom:2px solid transparent;transition:all .15s ease;white-space:nowrap}
-.nav-tab:hover{color:var(--text);background:#F8FAFC}
-.nav-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
-.nav-status{display:flex;align-items:center;gap:8px;white-space:nowrap}
-.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
-.status-dot.loading{background:var(--amber);animation:pulse-dot 1.2s infinite}
-.status-dot.ready{background:var(--green)}
-@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
-.status-label{font-family:var(--mono);font-size:11px;color:var(--muted)}
-
-/* ── Main ── */
-main{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.view{display:none;flex:1;overflow:hidden}
-.view.active{display:flex;flex-direction:column}
-
-/* ── Loading overlay ── */
-#loading-overlay{position:fixed;inset:0;background:#fff;display:flex;
-  align-items:center;justify-content:center;z-index:10000;flex-direction:column;gap:0}
-.load-inner{display:flex;flex-direction:column;align-items:center;gap:16px;max-width:420px;width:100%;padding:0 24px}
-.load-logo{width:64px;height:64px;color:var(--blue)}
-.load-title{font-family:var(--sans);font-weight:800;font-size:28px;color:var(--text);text-align:center}
-.load-sub{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
-.load-bar-wrap{width:100%;height:4px;background:var(--border-lt);border-radius:2px;overflow:hidden}
-.load-bar{height:4px;background:var(--blue);border-radius:2px;width:0;transition:width .4s ease}
-.load-stages{width:100%;display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.load-stage{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px}
-.load-stage-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--border)}
-.load-stage-dot.active{background:var(--blue);animation:pulse-dot 1s infinite}
-.load-stage-dot.done{background:var(--green)}
-.load-stage-label{color:var(--muted)}
-.load-stage.done .load-stage-label{color:var(--green)}
-.load-stage.active .load-stage-label{color:var(--blue);font-weight:500}
-
-/* ── Label utility ── */
-.label-up{font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
-
-/* ── Stage card (accent bar) ── */
-.stage-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);
-  border-left:4px solid var(--blue);padding:16px 20px}
-.stage-card.blue   {border-left-color:var(--blue)}
-.stage-card.purple {border-left-color:var(--purple)}
-.stage-card.amber  {border-left-color:var(--amber)}
-.stage-card.green  {border-left-color:var(--green)}
-.stage-card.teal   {border-left-color:var(--teal)}
-.stage-card.red    {border-left-color:var(--red)}
-
-/* ── Colored cards ── */
-.color-card{border:1px solid;border-radius:var(--r);padding:20px;
-  border-left:4px solid;display:flex;flex-direction:column;gap:6px}
-.color-card.blue  {background:var(--blue-bg);border-color:var(--blue-bd);border-left-color:var(--blue)}
-.color-card.green {background:var(--green-bg);border-color:var(--green-bd);border-left-color:var(--green)}
-.color-card.red   {background:var(--red-bg);border-color:var(--red-bd);border-left-color:var(--red)}
-.color-card.amber {background:var(--amber-bg);border-color:var(--amber-bd);border-left-color:var(--amber)}
-.color-card.purple{background:var(--purple-bg);border-color:var(--purple-bd);border-left-color:var(--purple)}
-.color-card.teal  {background:var(--teal-bg);border-color:var(--teal-bd);border-left-color:var(--teal)}
-.card-num{font-family:var(--sans);font-weight:700;font-size:2.2rem;line-height:1.1}
-.card-num.blue   {color:var(--blue)}
-.card-num.green  {color:var(--green)}
-.card-num.red    {color:var(--red)}
-.card-num.amber  {color:var(--amber)}
-.card-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px}
-
-/* ── Badges ── */
-.badge{font-family:var(--mono);border-radius:9999px;padding:2px 9px;font-size:10px;
-  font-weight:500;letter-spacing:.04em;text-transform:uppercase;display:inline-block}
-.badge-blue  {background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-bd)}
-.badge-purple{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-bd)}
-.badge-amber {background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
-.badge-green {background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
-.badge-red   {background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
-.badge-teal  {background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
-.badge-light {background:#F1F5F9;color:var(--muted);border:1px solid var(--border)}
-
-/* ── Buttons ── */
-.btn{font-family:var(--sans);font-weight:600;letter-spacing:.04em;border:none;
-  border-radius:var(--r);padding:8px 16px;cursor:pointer;font-size:12px;
-  transition:all .15s ease;text-transform:uppercase}
-.btn-blue  {background:var(--blue);color:#fff}.btn-blue:hover{background:#1D4ED8}
-.btn-green {background:var(--green);color:#fff}.btn-green:hover{background:#047857}
-.btn-amber {background:var(--amber);color:#fff}.btn-amber:hover{background:#B45309}
-.btn-red   {background:var(--red);color:#fff}.btn-red:hover{background:#B91C1C}
-.btn-ghost {background:#fff;color:var(--muted);border:1px solid var(--border)}
-.btn-ghost:hover{color:var(--text);border-color:var(--blue)}
-
-/* ── Inputs ── */
-input[type=text],input[type=search],select,textarea{
-  font-family:var(--mono);font-size:12px;background:#fff;
-  border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);padding:8px 10px;outline:none;transition:border .15s}
-input:focus,select:focus,textarea:focus{border-color:var(--blue)}
-input::placeholder,textarea::placeholder{color:var(--light)}
-
-/* ── Filter pills ── */
-.filter-pill{font-family:var(--mono);font-size:11px;letter-spacing:.04em;
-  text-transform:uppercase;padding:4px 12px;border-radius:9999px;
-  border:1px solid var(--border);background:#fff;color:var(--muted);
-  cursor:pointer;transition:all .15s ease}
-.filter-pill:hover{border-color:var(--blue);color:var(--blue)}
-.filter-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
-.filter-pill.blue-pill  {border-color:var(--blue-bd);color:var(--blue);background:var(--blue-bg)}
-.filter-pill.purple-pill{border-color:var(--purple-bd);color:var(--purple);background:var(--purple-bg)}
-.filter-pill.amber-pill {border-color:var(--amber-bd);color:var(--amber);background:var(--amber-bg)}
-.filter-pill.red-pill   {border-color:var(--red-bd);color:var(--red);background:var(--red-bg)}
-
-/* ── Tables ── */
-.data-table{width:100%;border-collapse:collapse;font-size:12px}
-.data-table th{font-family:var(--sans);font-size:10px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);padding:10px 14px;text-align:left;
-  background:var(--row-alt);border-bottom:1px solid var(--border)}
-.data-table td{padding:10px 14px;border-bottom:1px solid var(--border-lt);color:var(--text)}
-.data-table tr:nth-child(even) td{background:var(--row-alt)}
-.data-table tr:hover td{background:var(--blue-bg)}
-
-/* ════════════════════════════════════════
-   VIEW 1 — DASHBOARD
-════════════════════════════════════════ */
-#view-dashboard{overflow-y:auto;padding:24px;gap:20px}
-.db-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.db-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.db-chart-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px}
-.db-chart-card h3{font-family:var(--sans);font-size:10px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
-.chart-wrap{position:relative;height:200px}
-.timeline-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px}
-.timeline-card h3{font-family:var(--sans);font-size:10px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
-.db-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.recent-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-.mini-card{border:1px solid var(--border);border-radius:var(--r);border-left:3px solid var(--blue);
-  padding:10px 14px;cursor:pointer;transition:all .15s;background:#fff;
-  display:flex;align-items:center;justify-content:space-between}
-.mini-card:hover{border-color:var(--blue);background:var(--blue-bg)}
-.mini-card-name{font-family:var(--sans);font-weight:600;font-size:12px}
-.mini-card-sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
-.dec-summary-table{width:100%;border-collapse:collapse;margin-top:10px}
-.dec-summary-table td{padding:8px 0;font-size:12px;border-bottom:1px solid var(--border-lt)}
-.dec-summary-table .dec-num{font-family:var(--sans);font-weight:700;font-size:16px}
-
-/* ════════════════════════════════════════
-   VIEW 2 — INVESTIGATE
-════════════════════════════════════════ */
-#view-investigate{flex-direction:row;overflow:hidden}
-
-/* Left sidebar */
-.inv-left{width:280px;flex-shrink:0;background:#fff;border-right:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden}
-.inv-left-head{padding:12px;border-bottom:1px solid var(--border-lt)}
-.inv-left-head input{width:100%;margin-bottom:8px}
-.inv-filter-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
-.alert-list{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
-
-/* Alert card */
-.ac{background:#fff;border:1px solid var(--border);border-radius:var(--r);
-  border-left:3px solid var(--border);padding:10px 12px;cursor:pointer;
-  transition:all .15s ease;position:relative}
-.ac:hover{border-color:var(--blue);background:var(--blue-bg)}
-.ac.active{border-left-color:var(--blue);border-color:var(--blue);background:var(--blue-bg)}
-.ac.sev-HIGH   {border-left-color:var(--red)}
-.ac.sev-MEDIUM {border-left-color:var(--amber)}
-.ac.sev-LOW    {border-left-color:var(--green)}
-.ac.active.sev-HIGH  {border-color:var(--red);background:var(--red-bg)}
-.ac.active.sev-MEDIUM{border-color:var(--amber);background:var(--amber-bg)}
-.ac.active.sev-LOW   {border-color:var(--green);background:var(--green-bg)}
-.ac-name{font-family:var(--sans);font-weight:700;font-size:13px;margin-bottom:4px}
-.ac-badges{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
-.conf-bar-bg{height:3px;background:var(--border-lt);border-radius:2px;margin:4px 0 5px}
-.conf-bar{height:3px;border-radius:2px;background:var(--blue);transition:width .3s}
-.ac-meta{font-family:var(--mono);font-size:10px;color:var(--muted)}
-.dec-indicator{position:absolute;top:8px;right:8px;
-  width:7px;height:7px;border-radius:50%}
-.dec-indicator.confirm{background:var(--green)}
-.dec-indicator.review {background:var(--amber)}
-.dec-indicator.dismiss{background:var(--red)}
-
-/* Center */
-.inv-center{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:var(--bg)}
-.route-bar{background:#fff;border-bottom:1px solid var(--border);padding:10px 16px;
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;min-height:44px}
-.route-pill{font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:9999px;
-  border:1px solid var(--border);background:#fff;cursor:pointer;transition:all .15s}
-.route-pill:hover{border-color:var(--blue);color:var(--blue)}
-.route-pill.active-node{border-color:var(--blue);background:var(--blue);color:#fff}
-.route-arrow{color:var(--light);font-size:11px}
-.inv-stats-strip{background:#fff;border-bottom:1px solid var(--border);
-  display:flex;flex-shrink:0}
-.inv-stat{flex:1;padding:10px 16px;border-right:1px solid var(--border-lt);text-align:center}
-.inv-stat:last-child{border-right:none}
-.is-label{font-family:var(--mono);font-size:9px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted)}
-.is-val{font-family:var(--sans);font-weight:700;font-size:14px;margin-top:1px}
-.graph-area{flex:1;position:relative;min-height:0}
-#cy{width:100%;height:100%;background:#F8FAFC}
-.graph-toolbar{position:absolute;top:10px;right:10px;display:flex;gap:6px}
-.graph-btn{background:#fff;border:1px solid var(--border);color:var(--muted);
-  padding:4px 10px;border-radius:var(--r);font-size:11px;font-family:var(--mono);
-  cursor:pointer;transition:all .15s}
-.graph-btn:hover{border-color:var(--blue);color:var(--blue)}
-.inv-timeline{flex-shrink:0;background:#fff;border-top:1px solid var(--border);padding:12px 16px}
-.tl-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.tl-counter{font-family:var(--mono);font-size:11px;color:var(--muted)}
-.tl-controls{display:flex;gap:6px}
-.tl-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);
-  padding:10px 14px;font-size:12px;min-height:52px}
-.tl-route{font-family:var(--sans);font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.tl-details{display:flex;gap:14px;color:var(--muted);flex-wrap:wrap;font-family:var(--mono);font-size:11px}
-.tl-dots{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
-.tl-dot{width:8px;height:8px;border-radius:50%;background:var(--border);cursor:pointer;transition:.15s}
-.tl-dot.visited{background:var(--blue-bd)}
-.tl-dot.current{background:var(--blue)}
-
-/* Right panel */
-.inv-right{width:300px;flex-shrink:0;background:#fff;border-left:1px solid var(--border);
-  overflow-y:auto;display:flex;flex-direction:column}
-.ir-sec{padding:16px;border-bottom:1px solid var(--border-lt)}
-.ir-sec:last-child{border-bottom:none}
-.ir-pattern-name{font-family:var(--sans);font-weight:800;font-size:20px;margin-bottom:6px}
-.ir-desc{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6;margin-top:8px}
-.signal-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
-  border-radius:9999px;font-size:11px;background:var(--purple-bg);
-  border:1px solid var(--purple-bd);color:var(--purple);margin:3px 2px}
-.signal-chip.blue  {background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
-.signal-chip.amber {background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
-.signal-chip.green {background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
-.role-row{display:flex;align-items:center;gap:8px;padding:4px 0;
-  font-family:var(--mono);font-size:11px}
-.role-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dec-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.dec-reason-inp{width:100%;margin-top:8px;resize:none;height:52px;font-size:11px}
-.dec-status-box{margin-top:10px;padding:8px 12px;border-radius:var(--r);
-  font-family:var(--mono);font-size:11px;text-align:center;font-weight:500}
-.dec-status-box.confirm{background:var(--green-bg);color:var(--green);border:1px solid var(--green-bd)}
-.dec-status-box.review {background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
-.dec-status-box.dismiss{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
-
-/* Tooltip */
-#tooltip{position:fixed;background:#fff;border:1px solid var(--border);
-  border-radius:var(--r);padding:10px 14px;pointer-events:none;display:none;
-  z-index:9000;box-shadow:0 4px 16px rgba(0,0,0,.12);max-width:220px}
-#tooltip .tt-id{font-family:var(--sans);font-weight:700;font-size:13px;margin-bottom:6px}
-#tooltip .tt-row{display:flex;justify-content:space-between;gap:12px;
-  font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
-
-/* ════════════════════════════════════════
-   VIEW 3 — CASE MANAGER
-════════════════════════════════════════ */
-#view-cases{overflow-y:auto;padding:24px;gap:16px}
-.cases-hdr{display:flex;align-items:center;justify-content:space-between}
-.cases-hdr h2{font-family:var(--sans);font-weight:700;font-size:18px}
-.cases-filters{display:flex;gap:6px}
-.table-wrap{background:#fff;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.cases-empty{padding:48px;text-align:center;color:var(--muted);
-  font-family:var(--mono);font-size:12px}
-
-/* ════════════════════════════════════════
-   VIEW 4 — SEARCH
-════════════════════════════════════════ */
-#view-search{overflow-y:auto;padding:24px;gap:16px;align-items:center}
-.search-hdr{width:100%;max-width:640px}
-.search-hdr h2{font-family:var(--sans);font-weight:700;font-size:18px;margin-bottom:12px}
-.search-box{display:flex;gap:8px;width:100%;max-width:640px}
-.search-box input{flex:1}
-.quick-filters{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:640px}
-.search-results-grid{width:100%;display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.search-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);
-  border-left:3px solid var(--border);padding:16px;cursor:pointer;transition:all .15s}
-.search-card:hover{border-color:var(--blue);transform:translateY(-1px);
-  box-shadow:0 4px 12px rgba(0,0,0,.08)}
-.search-empty{color:var(--muted);font-family:var(--mono);font-size:12px;
-  grid-column:1/-1;text-align:center;padding:32px 0}
-
-/* ════════════════════════════════════════
-   VIEW 5 — VALIDATION
-════════════════════════════════════════ */
-#view-validation{overflow-y:auto;padding:24px;gap:20px}
-.val-hdr h2{font-family:var(--sans);font-weight:700;font-size:18px;margin-bottom:4px}
-.val-hdr p{font-family:var(--mono);font-size:11px;color:var(--muted)}
-.val-top{display:flex;align-items:flex-start;gap:20px}
-.ring-wrap{text-align:center;flex-shrink:0}
-.ring-label{font-family:var(--mono);font-size:10px;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
-.val-tables{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.val-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.val-card-hdr{padding:12px 16px;border-bottom:1px solid var(--border);
-  font-family:var(--mono);font-size:10px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);background:var(--row-alt)}
-.prec-bar-bg{height:5px;background:var(--border-lt);border-radius:2px}
-.prec-bar-fill{height:5px;border-radius:2px;background:var(--blue)}
-.val-explain{background:var(--blue-bg);border:1px solid var(--blue-bd);
-  border-radius:var(--r);padding:16px;font-family:var(--mono);font-size:11px;
-  color:var(--muted);line-height:1.7}
-
-/* ════════════════════════════════════════
-   VIEW 6 — WHITELIST
-════════════════════════════════════════ */
-#view-whitelist{overflow-y:auto;padding:24px;gap:20px}
-.wl-hdr h2{font-family:var(--sans);font-weight:700;font-size:18px;margin-bottom:4px}
-.verdict-banner{background:var(--blue-bg);border:1px solid var(--blue-bd);
-  border-left:4px solid var(--blue);border-radius:var(--r);
-  padding:16px 20px;display:flex;align-items:flex-start;gap:12px}
-.verdict-icon{font-size:22px;flex-shrink:0;margin-top:2px}
-.verdict-title{font-family:var(--sans);font-weight:700;font-size:13px;
-  text-transform:uppercase;letter-spacing:.06em;color:var(--blue);margin-bottom:4px}
-.verdict-desc{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6}
-.wl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.wl-panel{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px}
-.wl-panel-title{font-family:var(--sans);font-weight:700;font-size:12px;
-  text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
-.wl-account-item{display:flex;align-items:center;justify-content:space-between;
-  padding:8px 12px;border:1px solid var(--border-lt);border-radius:var(--r);
-  margin-bottom:6px;font-family:var(--mono);font-size:12px;background:#F8FAFC}
-.wl-remove-btn{background:none;border:none;color:var(--red);cursor:pointer;
-  font-size:16px;line-height:1;padding:0 4px}
-.wl-form{display:flex;flex-direction:column;gap:16px;height:100%}
-.wl-form input{width:100%}
-.wl-form .btn{margin-top:auto}
-.wl-exempt-banks{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.wl-rules-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.wl-rule-item{background:#F8FAFC;border:1px solid var(--border-lt);
-  border-left:3px solid var(--blue);border-radius:var(--r);padding:10px 14px}
-.wl-rule-pattern{font-family:var(--sans);font-weight:700;font-size:12px;margin-bottom:3px}
-.wl-rule-reason{font-family:var(--mono);font-size:11px;color:var(--muted)}
-.suppressed-section{background:#fff;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.suppressed-hdr{padding:12px 16px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between}
-.suppressed-hdr span{font-family:var(--mono);font-size:10px;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted)}
-
-/* ── Toasts ── */
-#toasts{position:fixed;top:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:9999}
-.toast{background:#fff;border:1px solid var(--border);border-radius:var(--r);
-  padding:10px 16px;font-family:var(--mono);font-size:12px;color:var(--text);
-  box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateX(120%);
-  transition:transform .25s ease;max-width:280px}
-.toast.show{transform:translateX(0)}
-.toast.info   {border-left:4px solid var(--blue)}
-.toast.success{border-left:4px solid var(--green)}
-.toast.error  {border-left:4px solid var(--red)}
-.toast.warning{border-left:4px solid var(--amber)}
-</style>
 </head>
 <body>
 
-<!-- Loading overlay -->
-<div id="loading-overlay">
-  <div class="load-inner">
-    <svg class="load-logo" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M32 8L8 18v18c0 14 10 24 24 28 14-4 24-14 24-28V18L32 8z"/>
-      <polyline points="22,32 28,38 42,24"/>
-    </svg>
-    <div class="load-title">AML Intelligence Platform</div>
-    <div class="load-sub">Fund Flow Tracking System</div>
-    <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
-    <div class="load-stages" id="load-stages">
-      <div class="load-stage" id="ls-0"><div class="load-stage-dot"></div><span class="load-stage-label">Connecting to backend...</span></div>
-      <div class="load-stage" id="ls-1"><div class="load-stage-dot"></div><span class="load-stage-label">Loading transaction graph...</span></div>
-      <div class="load-stage" id="ls-2"><div class="load-stage-dot"></div><span class="load-stage-label">Detecting patterns...</span></div>
-      <div class="load-stage" id="ls-3"><div class="load-stage-dot"></div><span class="load-stage-label">Building alert index...</span></div>
-      <div class="load-stage" id="ls-4"><div class="load-stage-dot"></div><span class="load-stage-label">Ready</span></div>
+<!-- ═══ AUTH SCREEN ═══ -->
+<div id="auth-screen">
+  <div class="auth-bg-grid" aria-hidden="true"></div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M32 6L6 17v19c0 15 11 26 26 30 15-4 26-15 26-30V17L32 6z"/>
+        <polyline points="22,32 28,38 42,24" stroke-width="2.5"/>
+      </svg>
+    </div>
+    <h1 class="auth-title">AML Intelligence</h1>
+    <p class="auth-subtitle">Secure Access Portal</p>
+
+    <!-- Step 1: Credentials -->
+    <form id="auth-step1" class="auth-form" onsubmit="event.preventDefault();authStep1()">
+      <div class="auth-field">
+        <label for="auth-company-id">Company ID</label>
+        <input type="text" id="auth-company-id" placeholder="e.g. UBI-AML-2026" required autocomplete="off"/>
+      </div>
+      <div class="auth-field">
+        <label for="auth-name">Officer Name</label>
+        <input type="text" id="auth-name" placeholder="Full name" required autocomplete="off"/>
+      </div>
+      <div class="auth-field">
+        <label for="auth-password">Password</label>
+        <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="off"/>
+      </div>
+      <button class="btn btn-blue auth-submit" type="submit">Authenticate</button>
+      <div id="auth-error" class="auth-error" style="display:none"></div>
+    </form>
+
+    <!-- Step 2: Auth Code -->
+    <form id="auth-step2" class="auth-form" style="display:none" onsubmit="event.preventDefault();authStep2()">
+      <div class="auth-2fa-header">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="4" y="14" width="24" height="16" rx="3" stroke="var(--blue)" stroke-width="2"/>
+          <path d="M10 14V10a6 6 0 1112 0v4" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="16" cy="22" r="2" fill="var(--blue)"/>
+        </svg>
+        <span>Two-Factor Authentication</span>
+      </div>
+      <p class="auth-2fa-desc">Enter the 6-digit code sent to your registered device</p>
+      <div class="auth-code-inputs" id="auth-code-inputs">
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="0" autocomplete="off" inputmode="numeric"/>
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="1" autocomplete="off" inputmode="numeric"/>
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="2" autocomplete="off" inputmode="numeric"/>
+        <span class="auth-code-sep">–</span>
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="3" autocomplete="off" inputmode="numeric"/>
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="4" autocomplete="off" inputmode="numeric"/>
+        <input type="text" maxlength="1" class="auth-code-digit" data-idx="5" autocomplete="off" inputmode="numeric"/>
+      </div>
+      <button class="btn btn-blue auth-submit" type="submit">Verify & Continue</button>
+      <div id="auth-error2" class="auth-error" style="display:none"></div>
+      <button type="button" class="auth-back-link" onclick="authBack()">← Back to login</button>
+    </form>
+
+    <div class="auth-footer">
+      <span>🔒 256-bit TLS Encrypted</span>
+      <span>SOC 2 Compliant</span>
     </div>
   </div>
 </div>
 
+<!-- ═══ CINEMATIC INTRO ═══ -->
+<div id="cinematic-intro" style="display:none">
+  <canvas id="cine-canvas" aria-hidden="true"></canvas>
+  <div class="cine-content" id="cine-content">
+    <svg class="cine-shield" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M32 6L6 17v19c0 15 11 26 26 30 15-4 26-15 26-30V17L32 6z"/>
+      <polyline points="22,32 28,38 42,24" stroke-width="2.5"/>
+    </svg>
+    <div class="cine-line" id="cine-line"></div>
+    <div class="cine-bank-name" id="cine-name">Union Bank of India</div>
+    <div class="cine-bank-sub" id="cine-sub">AML Intelligence Platform</div>
+    <div class="cine-tagline" id="cine-tagline">Securing the Financial Ecosystem</div>
+  </div>
+</div>
+
+<!-- ═══ LOADING SCREEN ═══ -->
+<div id="loading-overlay" role="status" aria-label="Loading platform" style="display:none">
+  <canvas id="load-canvas" aria-hidden="true"></canvas>
+  <div class="load-inner">
+    <svg class="load-logo" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+      <path d="M32 6L6 17v19c0 15 11 26 26 30 15-4 26-15 26-30V17L32 6z"/>
+      <polyline points="22,32 28,38 42,24" stroke-width="2.5"/>
+    </svg>
+    <div class="load-title">AML Intelligence Platform</div>
+    <div class="load-sub">Initializing Secure Environment</div>
+    <div class="load-bar-wrap"><div class="load-bar" id="load-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
+    <div class="load-stages" id="load-stages">
+      <div class="load-stage" id="ls-0"><div class="load-stage-dot"></div><span class="load-stage-label">Establishing secure connection...</span></div>
+      <div class="load-stage" id="ls-1"><div class="load-stage-dot"></div><span class="load-stage-label">Loading transaction graph...</span></div>
+      <div class="load-stage" id="ls-2"><div class="load-stage-dot"></div><span class="load-stage-label">Running pattern detection engine...</span></div>
+      <div class="load-stage" id="ls-3"><div class="load-stage-dot"></div><span class="load-stage-label">Building alert index...</span></div>
+      <div class="load-stage" id="ls-4"><div class="load-stage-dot"></div><span class="load-stage-label">Environment ready</span></div>
+    </div>
+    <div class="load-session-info" id="load-session-info"></div>
+  </div>
+</div>
+
 <!-- Navbar -->
-<nav>
+<nav aria-label="Main navigation">
   <div class="nav-brand">
     <div class="nav-title">AML Intelligence Platform</div>
     <div class="nav-sub">FUND FLOW TRACKING SYSTEM</div>
   </div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showView('dashboard')">Dashboard</button>
-    <button class="nav-tab" onclick="showView('investigate')">Investigate</button>
-    <button class="nav-tab" onclick="showView('cases')">Case Manager</button>
-    <button class="nav-tab" onclick="showView('search')">Search</button>
-    <button class="nav-tab" onclick="showView('validation')">Validation</button>
-    <button class="nav-tab" onclick="showView('whitelist')">Whitelist</button>
+  <div class="nav-tabs" role="tablist" aria-label="Platform views">
+    <button class="nav-tab active" onclick="showView('dashboard')" role="tab" aria-selected="true" aria-controls="view-dashboard">Dashboard</button>
+    <button class="nav-tab" onclick="showView('investigate')" role="tab" aria-selected="false" aria-controls="view-investigate">Investigate</button>
+    <button class="nav-tab" onclick="showView('cases')" role="tab" aria-selected="false" aria-controls="view-cases">Case Manager</button>
+    <button class="nav-tab" onclick="showView('search')" role="tab" aria-selected="false" aria-controls="view-search">Search</button>
+    <button class="nav-tab" onclick="showView('validation')" role="tab" aria-selected="false" aria-controls="view-validation">Validation</button>
+    <button class="nav-tab" onclick="showView('whitelist')" role="tab" aria-selected="false" aria-controls="view-whitelist">Whitelist</button>
   </div>
   <div class="nav-status">
-    <div class="status-dot loading" id="status-dot"></div>
-    <span class="status-label" id="status-label">Loading...</span>
-    <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" style="
-      margin-left:8px;background:none;border:1px solid var(--border);border-radius:var(--r);
-      padding:4px 8px;cursor:pointer;font-size:14px;color:var(--muted);line-height:1;
+    <span id="nav-user" style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:var(--muted);margin-right:var(--sp-2);display:none"></span>
+    <div class="status-dot loading" id="status-dot" aria-hidden="true"></div>
+    <span class="status-label" id="status-label" role="status">Loading...</span>
+    <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode" style="
+      margin-left:var(--sp-2);background:none;border:1px solid var(--border);border-radius:var(--r);
+      padding:var(--sp-1) var(--sp-2);cursor:pointer;font-size:var(--text-base);color:var(--muted);line-height:1;
       transition:all .15s ease;flex-shrink:0">☀️</button>
   </div>
 </nav>
@@ -500,7 +141,7 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 <main>
 
 <!-- ═══ VIEW 1 — DASHBOARD ═══ -->
-<div class="view active" id="view-dashboard">
+<div class="view active" id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
   <div class="db-grid-4">
     <div class="color-card blue"><span class="label-up">Total Alerts</span><div class="card-num blue" id="st-total">—</div><div class="card-sub">Labelled + Unlabelled</div></div>
     <div class="color-card green"><span class="label-up">Money Flagged</span><div class="card-num green" id="st-money">—</div><div class="card-sub">Across all alerts</div></div>
@@ -508,21 +149,21 @@ input::placeholder,textarea::placeholder{color:var(--light)}
     <div class="color-card amber"><span class="label-up">Decisions Made</span><div class="card-num amber" id="st-dec">—</div><div class="card-sub">Confirmed / reviewed / dismissed</div></div>
   </div>
   <div class="db-grid-2">
-    <div class="db-chart-card"><h3>Pattern Breakdown</h3><div class="chart-wrap"><canvas id="chart-donut"></canvas></div></div>
-    <div class="db-chart-card"><h3>Most Involved Banks</h3><div class="chart-wrap"><canvas id="chart-banks"></canvas></div></div>
+    <div class="db-chart-card"><h3>Pattern Breakdown</h3><div class="chart-wrap"><canvas id="chart-donut" aria-label="Donut chart showing pattern type distribution"></canvas></div></div>
+    <div class="db-chart-card"><h3>Most Involved Banks</h3><div class="chart-wrap"><canvas id="chart-banks" aria-label="Bar chart showing most involved banks"></canvas></div></div>
   </div>
   <div class="timeline-card">
     <h3>Suspicious Activity Over 48-Hour Window</h3>
-    <div class="chart-wrap"><canvas id="chart-tl"></canvas></div>
+    <div class="chart-wrap"><canvas id="chart-tl" aria-label="Timeline chart showing suspicious activity over 48 hours"></canvas></div>
   </div>
   <div class="db-bottom">
-    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
       <span class="label-up">Recent Alerts</span>
-      <div class="recent-list" id="db-recent"></div>
+      <div class="recent-list" id="db-recent" role="list" aria-label="Recent alerts"></div>
     </div>
-    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
       <span class="label-up">Decision Summary</span>
-      <table class="dec-summary-table">
+      <table class="dec-summary-table" aria-label="Decision summary">
         <tr><td>Confirmed</td><td><span class="dec-num" id="dc-confirm" style="color:var(--green)">0</span></td></tr>
         <tr><td>Needs Review</td><td><span class="dec-num" id="dc-review" style="color:var(--amber)">0</span></td></tr>
         <tr><td>Dismissed</td><td><span class="dec-num" id="dc-dismiss" style="color:var(--red)">0</span></td></tr>
@@ -533,29 +174,30 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 </div>
 
 <!-- ═══ VIEW 2 — INVESTIGATE ═══ -->
-<div class="view" id="view-investigate">
+<div class="view" id="view-investigate" role="tabpanel" aria-labelledby="tab-investigate">
   <div class="inv-left">
     <div class="inv-left-head">
-      <input type="search" placeholder="Search alerts…" id="inv-search" oninput="renderSidebar()"/>
-      <div class="inv-filter-row" id="src-pills">
-        <span class="filter-pill active" onclick="setSrc('all',this)">All</span>
-        <span class="filter-pill" onclick="setSrc('labelled',this)">Labelled</span>
-        <span class="filter-pill" onclick="setSrc('unlabelled',this)">Unlabelled</span>
-        <span class="filter-pill" onclick="setSrc('both',this)">Both</span>
+      <label for="inv-search" class="label-up" style="margin-bottom:var(--sp-1)">Search alerts</label>
+      <input type="search" placeholder="Search alerts…" id="inv-search" oninput="renderSidebar()" aria-label="Filter alerts by name or ID"/>
+      <div class="inv-filter-row" id="src-pills" role="group" aria-label="Source filter">
+        <span class="filter-pill active" onclick="setSrc('all',this)" role="button" tabindex="0">All</span>
+        <span class="filter-pill" onclick="setSrc('labelled',this)" role="button" tabindex="0">Labelled</span>
+        <span class="filter-pill" onclick="setSrc('unlabelled',this)" role="button" tabindex="0">Unlabelled</span>
+        <span class="filter-pill" onclick="setSrc('both',this)" role="button" tabindex="0">Both</span>
       </div>
-      <div class="inv-filter-row" id="sev-pills">
-        <span class="filter-pill active" onclick="setSev('all',this)">All</span>
-        <span class="filter-pill" onclick="setSev('HIGH',this)">High</span>
-        <span class="filter-pill" onclick="setSev('MEDIUM',this)">Medium</span>
-        <span class="filter-pill" onclick="setSev('LOW',this)">Low</span>
+      <div class="inv-filter-row" id="sev-pills" role="group" aria-label="Severity filter">
+        <span class="filter-pill active" onclick="setSev('all',this)" role="button" tabindex="0">All</span>
+        <span class="filter-pill" onclick="setSev('HIGH',this)" role="button" tabindex="0">High</span>
+        <span class="filter-pill" onclick="setSev('MEDIUM',this)" role="button" tabindex="0">Medium</span>
+        <span class="filter-pill" onclick="setSev('LOW',this)" role="button" tabindex="0">Low</span>
       </div>
     </div>
-    <div class="alert-list" id="alert-list"></div>
+    <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
   </div>
 
   <div class="inv-center">
-    <div class="route-bar" id="route-bar"><span style="color:var(--light);font-size:12px;font-family:var(--mono)">Select an alert to begin investigation</span></div>
-    <div class="inv-stats-strip">
+    <div class="route-bar" id="route-bar" aria-label="Transaction route"><span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert to begin investigation</span></div>
+    <div class="inv-stats-strip" aria-label="Alert statistics">
       <div class="inv-stat"><div class="is-label">Total Moved</div><div class="is-val" id="is-moved">—</div></div>
       <div class="inv-stat"><div class="is-label">Time Span</div><div class="is-val" id="is-span">—</div></div>
       <div class="inv-stat"><div class="is-label">Hops</div><div class="is-val" id="is-hops">—</div></div>
@@ -563,61 +205,61 @@ input::placeholder,textarea::placeholder{color:var(--light)}
       <div class="inv-stat"><div class="is-label">Pattern</div><div class="is-val" id="is-pat">—</div></div>
     </div>
     <div class="graph-area">
-      <div id="cy"></div>
-      <div class="graph-toolbar">
-        <button class="graph-btn" onclick="cy&&cy.fit()">Fit</button>
-        <button class="graph-btn" onclick="downloadPNG()">PNG</button>
-        <button class="graph-btn" onclick="resetHighlight()">Reset</button>
+      <div id="cy" role="img" aria-label="Transaction network graph"></div>
+      <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
+        <button class="graph-btn" onclick="cy&&cy.fit()" aria-label="Fit graph to view">Fit</button>
+        <button class="graph-btn" onclick="downloadPNG()" aria-label="Download graph as PNG">PNG</button>
+        <button class="graph-btn" onclick="resetHighlight()" aria-label="Reset graph highlights">Reset</button>
       </div>
     </div>
-    <div class="inv-timeline">
+    <div class="inv-timeline" aria-label="Transaction timeline">
       <div class="tl-header">
         <span class="tl-counter" id="tl-counter">— / —</span>
-        <div class="tl-controls">
-          <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px" onclick="stepBy(-1)">◀ Prev</button>
-          <button class="btn btn-blue" style="font-size:11px;padding:5px 12px" id="play-btn" onclick="tlPlay()">▶ Play</button>
-          <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px" onclick="stepBy(1)">Next ▶</button>
+        <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev <span class="kbd-hint">←</span></button>
+          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play <span class="kbd-hint">Space</span></button>
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶ <span class="kbd-hint">→</span></button>
         </div>
       </div>
-      <div class="tl-card" id="tl-card"><span style="color:var(--light);font-family:var(--mono);font-size:11px">No transaction selected</span></div>
-      <div class="tl-dots" id="tl-dots"></div>
+      <div class="tl-card" id="tl-card"><span style="color:var(--light);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span></div>
+      <div class="tl-dots" id="tl-dots" role="group" aria-label="Transaction steps"></div>
     </div>
   </div>
 
   <div class="inv-right">
-    <div class="ir-sec" id="ir-pattern-sec"><div style="color:var(--light);font-size:12px;font-family:var(--mono)">Select an alert</div></div>
+    <div class="ir-sec" id="ir-pattern-sec"><div style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert</div></div>
     <div class="ir-sec" id="ir-source-sec" style="display:none"></div>
     <div class="ir-sec" id="ir-roles-sec" style="display:none"></div>
     <div class="ir-sec">
       <span class="label-up">Decision</span>
-      <div class="dec-btns">
-        <button class="btn btn-green" onclick="postDecision('confirm')">✓ Confirm</button>
-        <button class="btn btn-amber" onclick="postDecision('review')">⚠ Review</button>
-        <button class="btn btn-red"   onclick="postDecision('dismiss')">✗ Dismiss</button>
+      <div class="dec-btns" role="group" aria-label="Decision actions">
+        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span class="kbd-hint">C</span></button>
+        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span class="kbd-hint">R</span></button>
+        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span class="kbd-hint">D</span></button>
       </div>
-      <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…"></textarea>
-      <div id="dec-status-box" style="display:none"></div>
+      <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…" aria-label="Decision reason"></textarea>
+      <div id="dec-status-box" style="display:none" role="status"></div>
     </div>
   </div>
 </div>
 
 <!-- ═══ VIEW 3 — CASE MANAGER ═══ -->
-<div class="view" id="view-cases">
+<div class="view" id="view-cases" role="tabpanel" aria-labelledby="tab-cases">
   <div class="cases-hdr">
     <h2>Case Manager</h2>
-    <div style="display:flex;gap:8px;align-items:center">
-      <div class="cases-filters" id="case-filters">
-        <span class="filter-pill active" onclick="setCaseFilter('all',this)">All</span>
-        <span class="filter-pill" onclick="setCaseFilter('confirm',this)">Confirmed</span>
-        <span class="filter-pill" onclick="setCaseFilter('review',this)">Reviewed</span>
-        <span class="filter-pill" onclick="setCaseFilter('dismiss',this)">Dismissed</span>
+    <div style="display:flex;gap:var(--sp-2);align-items:center">
+      <div class="cases-filters" id="case-filters" role="group" aria-label="Case decision filter">
+        <span class="filter-pill active" onclick="setCaseFilter('all',this)" role="button" tabindex="0">All</span>
+        <span class="filter-pill" onclick="setCaseFilter('confirm',this)" role="button" tabindex="0">Confirmed</span>
+        <span class="filter-pill" onclick="setCaseFilter('review',this)" role="button" tabindex="0">Reviewed</span>
+        <span class="filter-pill" onclick="setCaseFilter('dismiss',this)" role="button" tabindex="0">Dismissed</span>
       </div>
-      <button class="btn btn-ghost" onclick="exportCSV()">Export CSV</button>
+      <button class="btn btn-ghost" onclick="exportCSV()" aria-label="Export cases as CSV">Export CSV</button>
     </div>
   </div>
   <div class="table-wrap">
-    <table class="data-table">
-      <thead><tr><th>Alert ID</th><th>Pattern</th><th>Severity</th><th>Confidence</th><th>Total Moved</th><th>Source</th><th>Decision</th><th>Reason</th><th></th></tr></thead>
+    <table class="data-table" aria-label="Case decisions">
+      <thead><tr><th scope="col">Alert ID</th><th scope="col">Pattern</th><th scope="col">Severity</th><th scope="col">Confidence</th><th scope="col">Total Moved</th><th scope="col">Source</th><th scope="col">Decision</th><th scope="col">Reason</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
       <tbody id="cases-tbody"></tbody>
     </table>
     <div class="cases-empty" id="cases-empty">No decisions made yet. Go to Investigate to review alerts.</div>
@@ -625,69 +267,70 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 </div>
 
 <!-- ═══ VIEW 4 — SEARCH ═══ -->
-<div class="view" id="view-search">
+<div class="view" id="view-search" role="tabpanel" aria-labelledby="tab-search">
   <div class="search-hdr"><h2>Search Alerts</h2></div>
   <div class="search-box">
-    <input type="text" id="search-inp" placeholder="Search by account ID, bank, or pattern…" onkeydown="if(event.key==='Enter')doSearch()"/>
-    <button class="btn btn-blue" onclick="doSearch()">Search</button>
+    <label for="search-inp" class="sr-only">Search alerts</label>
+    <input type="text" id="search-inp" placeholder="Search by account ID, bank, or pattern…" onkeydown="if(event.key==='Enter')doSearch()" aria-label="Search alerts by account, bank, or pattern"/>
+    <button class="btn btn-blue" onclick="doSearch()" aria-label="Search">Search</button>
   </div>
-  <div class="quick-filters">
-    <span class="filter-pill blue-pill"   onclick="qFilter('fanOut')">FAN-OUT</span>
-    <span class="filter-pill blue-pill"   onclick="qFilter('fanIn')">FAN-IN</span>
-    <span class="filter-pill purple-pill" onclick="qFilter('cycle')">CYCLE</span>
-    <span class="filter-pill amber-pill"  onclick="qFilter('scatterGather')">SCATTER-GATHER</span>
-    <span class="filter-pill amber-pill"  onclick="qFilter('bipartite')">BIPARTITE</span>
-    <span class="filter-pill red-pill"    onclick="qFilter('HIGH','sev')">HIGH SEVERITY</span>
-    <span class="filter-pill"            onclick="qFilter('unlabelled','src')">UNLABELLED ONLY</span>
+  <div class="quick-filters" role="group" aria-label="Quick pattern filters">
+    <span class="filter-pill blue-pill"   onclick="qFilter('fanOut')" role="button" tabindex="0">FAN-OUT</span>
+    <span class="filter-pill blue-pill"   onclick="qFilter('fanIn')" role="button" tabindex="0">FAN-IN</span>
+    <span class="filter-pill purple-pill" onclick="qFilter('cycle')" role="button" tabindex="0">CYCLE</span>
+    <span class="filter-pill amber-pill"  onclick="qFilter('scatterGather')" role="button" tabindex="0">SCATTER-GATHER</span>
+    <span class="filter-pill amber-pill"  onclick="qFilter('bipartite')" role="button" tabindex="0">BIPARTITE</span>
+    <span class="filter-pill red-pill"    onclick="qFilter('HIGH','sev')" role="button" tabindex="0">HIGH SEVERITY</span>
+    <span class="filter-pill"            onclick="qFilter('unlabelled','src')" role="button" tabindex="0">UNLABELLED ONLY</span>
   </div>
-  <div class="search-results-grid" id="search-results">
-    <div class="search-empty">Start typing to search all 201 alerts…</div>
+  <div class="search-results-grid" id="search-results" aria-label="Search results">
+    <div class="search-empty">Start typing to search all alerts…</div>
   </div>
 </div>
 
 <!-- ═══ VIEW 5 — VALIDATION ═══ -->
-<div class="view" id="view-validation">
+<div class="view" id="view-validation" role="tabpanel" aria-labelledby="tab-validation">
   <div class="val-hdr"><h2>Validation — Ground Truth Comparison</h2><p>Alerts cross-validated against IBM HI-Small_Patterns.txt</p></div>
   <div class="val-top">
     <div class="ring-wrap">
-      <svg width="110" height="110" viewBox="0 0 110 110">
-        <circle cx="55" cy="55" r="44" fill="none" stroke="#E2E8F0" stroke-width="10"/>
-        <circle cx="55" cy="55" r="44" fill="none" stroke="#2563EB" stroke-width="10"
+      <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="Labelled precision ring">
+        <circle cx="55" cy="55" r="44" fill="none" stroke="var(--border-lt)" stroke-width="10"/>
+        <circle cx="55" cy="55" r="44" fill="none" stroke="var(--blue)" stroke-width="10"
           stroke-dasharray="276" stroke-dashoffset="276" stroke-linecap="round"
           transform="rotate(-90 55 55)" id="ring-lab"/>
-        <text x="55" y="51" text-anchor="middle" fill="#0F172A" font-size="16" font-weight="700" font-family="Syne,sans-serif" id="ring-lab-pct">—</text>
-        <text x="55" y="65" text-anchor="middle" fill="#475569" font-size="9" font-family="DM Mono,monospace">LABELLED</text>
+        <text x="55" y="51" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700" font-family="Plus Jakarta Sans,sans-serif" id="ring-lab-pct">—</text>
+        <text x="55" y="65" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="DM Mono,monospace">LABELLED</text>
       </svg>
       <div class="ring-label">Precision</div>
     </div>
     <div class="ring-wrap">
-      <svg width="110" height="110" viewBox="0 0 110 110">
-        <circle cx="55" cy="55" r="44" fill="none" stroke="#E2E8F0" stroke-width="10"/>
-        <circle cx="55" cy="55" r="44" fill="none" stroke="#7C3AED" stroke-width="10"
+      <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="Unlabelled precision ring">
+        <circle cx="55" cy="55" r="44" fill="none" stroke="var(--border-lt)" stroke-width="10"/>
+        <circle cx="55" cy="55" r="44" fill="none" stroke="var(--purple)" stroke-width="10"
           stroke-dasharray="276" stroke-dashoffset="276" stroke-linecap="round"
           transform="rotate(-90 55 55)" id="ring-unlab"/>
-        <text x="55" y="51" text-anchor="middle" fill="#0F172A" font-size="16" font-weight="700" font-family="Syne,sans-serif" id="ring-unlab-pct">—</text>
-        <text x="55" y="65" text-anchor="middle" fill="#475569" font-size="9" font-family="DM Mono,monospace">UNLABELLED</text>
+        <text x="55" y="51" text-anchor="middle" fill="var(--text)" font-size="16" font-weight="700" font-family="Plus Jakarta Sans,sans-serif" id="ring-unlab-pct">—</text>
+        <text x="55" y="65" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="DM Mono,monospace">UNLABELLED</text>
       </svg>
       <div class="ring-label">Precision</div>
     </div>
-    <div style="flex:1;background:#fff;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
-      <div style="padding:12px 16px;background:#F8FAFC;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Mode Comparison</div>
-      <table class="data-table" id="val-compare-tbl">
-        <thead><tr><th>Mode</th><th>Alerts</th><th>Matched GT</th><th>Precision</th><th>Recall</th></tr></thead>
-        <tbody id="val-compare-body"><tr><td colspan="5" style="color:var(--muted);padding:20px">Loading validation data…</td></tr></tbody>
+    <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+      <div style="padding:var(--sp-3) var(--sp-4);background:var(--row-alt);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Mode Comparison</div>
+      <table class="data-table" id="val-compare-tbl" aria-label="Mode comparison">
+        <thead><tr><th scope="col">Mode</th><th scope="col">Alerts</th><th scope="col">Matched GT</th><th scope="col">Precision</th><th scope="col">Recall</th></tr></thead>
+        <tbody id="val-compare-body"><tr><td colspan="5" style="color:var(--muted);padding:var(--sp-5)">Loading validation data…</td></tr></tbody>
       </table>
     </div>
   </div>
   <div class="val-tables">
     <div class="val-card">
       <div class="val-card-hdr">Per-Pattern Precision (Labelled)</div>
-      <table class="data-table"><thead><tr><th>Pattern</th><th>Detected</th><th>Correct</th><th>Precision</th></tr></thead>
+      <table class="data-table" aria-label="Per-pattern precision"><thead><tr><th scope="col">Pattern</th><th scope="col">Detected</th><th scope="col">Correct</th><th scope="col">Precision</th></tr></thead>
       <tbody id="val-prec-body"></tbody></table>
     </div>
     <div class="val-card">
       <div class="val-card-hdr">Per-Pattern Recall (Labelled)</div>
-      <table class="data-table"><thead><tr><th>Pattern</th><th>In GT</th><th>Found</th><th>Recall</th></tr></thead>
+      <table class="data-table" aria-label="Per-pattern recall"><thead><tr><th scope="col">Pattern</th><th scope="col">In GT</th><th scope="col">Found</th><th scope="col">Recall</th></tr></thead>
       <tbody id="val-recall-body"></tbody></table>
     </div>
   </div>
@@ -699,10 +342,10 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 </div>
 
 <!-- ═══ VIEW 6 — WHITELIST ═══ -->
-<div class="view" id="view-whitelist">
-  <div style="display:flex;flex-direction:column;gap:0"><h2 style="font-family:var(--sans);font-weight:700;font-size:18px">Whitelist / Exemption System</h2></div>
+<div class="view" id="view-whitelist" role="tabpanel" aria-labelledby="tab-whitelist">
+  <div style="display:flex;flex-direction:column;gap:0"><h2 style="font-family:var(--sans);font-weight:700;font-size:var(--text-xl)">Whitelist / Exemption System</h2></div>
   <div class="verdict-banner">
-    <div class="verdict-icon">🛡️</div>
+    <div class="verdict-icon" aria-hidden="true">🛡️</div>
     <div>
       <div class="verdict-title">False Positive Reduction</div>
       <div class="verdict-desc">Business accounts and known financial institutions are exempt from certain detection patterns to reduce false positives.
@@ -712,32 +355,32 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   <div class="wl-grid">
     <div class="wl-panel">
       <div class="wl-panel-title">Current Exempt Accounts</div>
-      <div id="wl-accounts-list"><span style="color:var(--light);font-size:11px;font-family:var(--mono)">No accounts explicitly whitelisted</span></div>
-      <div style="margin-top:16px"><div class="wl-panel-title">Exempt Banks</div><div class="wl-exempt-banks" id="wl-banks-list"></div></div>
-      <div style="margin-top:16px"><div class="wl-panel-title">Active Exemption Rules</div><div class="wl-rules-list" id="wl-rules-list"></div></div>
+      <div id="wl-accounts-list" role="list" aria-label="Exempt accounts"><span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No accounts explicitly whitelisted</span></div>
+      <div style="margin-top:var(--sp-4)"><div class="wl-panel-title">Exempt Banks</div><div class="wl-exempt-banks" id="wl-banks-list" role="list" aria-label="Exempt banks"></div></div>
+      <div style="margin-top:var(--sp-4)"><div class="wl-panel-title">Active Exemption Rules</div><div class="wl-rules-list" id="wl-rules-list" role="list" aria-label="Exemption rules"></div></div>
     </div>
     <div class="wl-panel" style="display:flex;flex-direction:column">
       <div class="wl-panel-title">Add Account to Whitelist</div>
-      <div class="wl-form" style="flex:1">
+      <form class="wl-form" style="flex:1" onsubmit="event.preventDefault();addWhitelistAccount()">
         <div>
-          <span class="label-up">Account ID</span>
-          <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:6px"/>
+          <label for="wl-account-inp" class="label-up">Account ID</label>
+          <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:var(--sp-2)"/>
         </div>
         <div>
-          <span class="label-up">Reason</span>
-          <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account" style="margin-top:6px"/>
+          <label for="wl-reason-inp" class="label-up">Reason</label>
+          <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account" style="margin-top:var(--sp-2)"/>
         </div>
-        <button class="btn btn-blue" onclick="addWhitelistAccount()" style="margin-top:auto">Add to Whitelist</button>
-      </div>
+        <button class="btn btn-blue" type="submit" style="margin-top:auto">Add to Whitelist</button>
+      </form>
     </div>
   </div>
   <div class="suppressed-section">
     <div class="suppressed-hdr">
       <span>Suppressed Alerts</span>
-      <span id="suppressed-count" style="color:var(--muted);font-family:var(--mono);font-size:11px">0 alerts</span>
+      <span id="suppressed-count" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">0 alerts</span>
     </div>
-    <table class="data-table">
-      <thead><tr><th>Alert ID</th><th>Pattern</th><th>Severity</th><th>Exemption Reason</th><th>Exempt Accounts</th><th></th></tr></thead>
+    <table class="data-table" aria-label="Suppressed alerts">
+      <thead><tr><th scope="col">Alert ID</th><th scope="col">Pattern</th><th scope="col">Severity</th><th scope="col">Exemption Reason</th><th scope="col">Exempt Accounts</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
       <tbody id="suppressed-tbody"></tbody>
     </table>
     <div class="cases-empty" id="suppressed-empty">No alerts suppressed — whitelist rules have not matched any detected clusters.</div>
@@ -747,978 +390,15 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 </main>
 
 <!-- Tooltip -->
-<div id="tooltip">
+<div id="tooltip" role="tooltip">
   <div class="tt-id" id="tt-id"></div>
   <div class="tt-row"><span>Bank</span><span id="tt-bank"></span></div>
   <div class="tt-row"><span>Role</span><span id="tt-role"></span></div>
   <div class="tt-row"><span>Volume</span><span id="tt-vol"></span></div>
   <div class="tt-row"><span>Txns</span><span id="tt-txn"></span></div>
 </div>
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-<script>
-/* ════════════════════════════════════════════
-   CONFIG
-════════════════════════════════════════════ */
-const API_BASE = (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '')
-  ? 'http://localhost:8000'
-  : 'https://ideahackathon-1.onrender.com';
-
-/* ── Pattern formatting ── */
-function formatPatternName(pt) {
-  const map = {
-    fanOut:'FAN-OUT', fanIn:'FAN-IN',
-    scatterGather:'SCATTER-GATHER', gatherScatter:'GATHER-SCATTER',
-    cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK', random:'RANDOM',
-  };
-  return map[pt] || pt.toUpperCase();
-}
-const PATTERN_ICONS = {
-  fanOut:'📤', fanIn:'📥', cycle:'🔄', scatterGather:'🔀',
-  gatherScatter:'⚖️', bipartite:'⚖️', stack:'📚', random:'❓'
-};
-
-const SIGNAL_ICONS = {
-  'Rapid Fan-Out':'⚡', 'Round-Trip':'🔁', 'Structuring':'💰',
-  'Layering Velocity':'🌊', 'Dormant Activation':'😴',
-  'Currency Mismatch':'💱', 'Smurfing':'🐚',
-};
-
-const SEV_BADGE = { HIGH:'badge-red', MEDIUM:'badge-amber', LOW:'badge-green' };
-const SEV_COLOR = { HIGH:'var(--red)', MEDIUM:'var(--amber)', LOW:'var(--green)' };
-const SRC_BADGE = { labelled:'badge-blue', unlabelled:'badge-purple', both:'badge-amber' };
-const SRC_LABEL = { labelled:'LABELLED', unlabelled:'UNLABELLED', both:'BOTH' };
-
-/* ── State ── */
-let allAlerts    = [];
-let alertDetails = {};
-let decisions    = {};
-let currentAlert = null;
-let cy           = null;
-let currentStep  = -1;
-let playTimer    = null;
-let srcFilter    = 'all';
-let sevFilter    = 'all';
-let caseFilter   = 'all';
-let dbCharts     = {};
-
-/* ════════════════════════════════════════════
-   INIT — loading stages
-════════════════════════════════════════════ */
-const STAGES = ['ls-0','ls-1','ls-2','ls-3','ls-4'];
-const BAR_PCTS = [10, 30, 60, 85, 100];
-const STAGE_DELAYS = [0, 1500, 3000, 4800, 6500]; // ms cumulative from init start
-
-function setStage(idx) {
-  STAGES.forEach((id, i) => {
-    const el = document.getElementById(id);
-    const dot = el.querySelector('.load-stage-dot');
-    el.classList.remove('active','done');
-    dot.classList.remove('active','done');
-    if (i < idx)      { el.classList.add('done'); dot.classList.add('done'); }
-    else if (i === idx){ el.classList.add('active'); dot.classList.add('active'); }
-  });
-  document.getElementById('load-bar').style.width = BAR_PCTS[Math.min(idx,4)] + '%';
-}
-
-async function init() {
-  const t0 = Date.now();
-  setStage(0);
-  await pollUntilReady();
-
-  // Enforce minimum cumulative time per stage so animation is visible even on cache hits
-  const minWait = s => Math.max(0, STAGE_DELAYS[s] - (Date.now() - t0));
-  await sleep(minWait(1)); setStage(1);
-  await sleep(minWait(2)); setStage(2);
-  await sleep(minWait(3)); setStage(3);
-  await loadAllAlerts();
-  await sleep(minWait(4)); setStage(4);
-  await sleep(400);
-  const ov = document.getElementById('loading-overlay');
-  ov.style.transition = 'opacity .4s';
-  ov.style.opacity = '0';
-  setTimeout(() => ov.style.display = 'none', 400);
-  renderDashboard();
-  renderSidebar();
-  toast('Platform ready', 'success');
-}
-
-async function pollUntilReady() {
-  let lastCount = 0;
-  while (true) {
-    try {
-      const r = await fetch(`${API_BASE}/status`).catch(() => null);
-      if (r && r.ok) {
-        const d = await r.json();
-        setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
-        lastCount = d.alert_count;
-        if (d.status === 'error') {
-          document.getElementById('status-dot').className = 'status-dot' ;
-          document.getElementById('status-dot').style.background = 'var(--red)';
-          document.getElementById('status-label').textContent = 'Pipeline error';
-          document.querySelector('.load-sub').textContent = d.error || 'Pipeline failed to start.';
-          document.querySelector('.load-sub').style.color = 'var(--red)';
-          return d;
-        }
-        if (d.status === 'ready') {
-          document.getElementById('status-dot').className = 'status-dot ready';
-          document.getElementById('status-label').textContent =
-            `Live · ${d.alert_count} alerts | L:${d.labelled_count} U:${d.unlabelled_count} ∩:${d.overlap_count}`;
-          return d;
-        }
-      }
-    } catch(e) {}
-    await sleep(3000);
-  }
-}
-
-async function loadAllAlerts() {
-  const r = await fetch(`${API_BASE}/alerts`);
-  allAlerts = await r.json();
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-/* ════════════════════════════════════════════
-   VIEW SWITCHING
-════════════════════════════════════════════ */
-function toggleDark() {
-  const dark = document.body.classList.toggle('dark');
-  document.getElementById('dark-toggle').textContent = dark ? '🌙' : '☀️';
-  localStorage.setItem('aml-dark', dark ? '1' : '');
-}
-(function(){if(localStorage.getItem('aml-dark')){document.body.classList.add('dark');const b=document.getElementById('dark-toggle');if(b)b.textContent='🌙';}})();
-
-function showView(name) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`view-${name}`).classList.add('active');
-  [...document.querySelectorAll('.nav-tab')].find(t =>
-    t.textContent.toLowerCase().includes(name.replace('_',' ').split(' ')[0])
-  )?.classList.add('active');
-
-  if (name === 'dashboard')   renderDashboard();
-  if (name === 'investigate') { renderSidebar(); if (!currentAlert && allAlerts.length) loadAlertById(allAlerts[0].id); }
-  if (name === 'cases')       renderCaseManager();
-  if (name === 'search')      runSearch('', 'all');
-  if (name === 'validation')  loadValidation();
-  if (name === 'whitelist')   loadWhitelist();
-}
-
-/* ════════════════════════════════════════════
-   DASHBOARD
-════════════════════════════════════════════ */
-function renderDashboard() {
-  if (!allAlerts.length) return;
-
-  document.getElementById('st-total').textContent = allAlerts.length;
-  const total = allAlerts.reduce((s,a) => s + parseMoney(a.totalMoved), 0);
-  document.getElementById('st-money').textContent = fmtMoney(total);
-  document.getElementById('st-high').textContent  = allAlerts.filter(a=>a.severity==='HIGH').length;
-  document.getElementById('st-dec').textContent   = Object.keys(decisions).length;
-
-  // Pattern donut
-  const ptMap = {};
-  allAlerts.forEach(a => { ptMap[formatPatternName(a.patternType)] = (ptMap[formatPatternName(a.patternType)]||0)+1; });
-  const colors = ['#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#475569','#94A3B8'];
-  if (dbCharts.donut) dbCharts.donut.destroy();
-  dbCharts.donut = new Chart(document.getElementById('chart-donut').getContext('2d'), {
-    type:'doughnut',
-    data:{ labels:Object.keys(ptMap), datasets:[{ data:Object.values(ptMap),
-      backgroundColor:colors, borderColor:'#fff', borderWidth:2 }]},
-    options:{ plugins:{ legend:{ position:'right', labels:{ color:document.body.classList.contains('dark')?'#94A3B8':'#475569', font:{size:10}, boxWidth:12 } } },
-      cutout:'62%', maintainAspectRatio:false }
-  });
-
-  // Banks bar — from cached details
-  const bankMap = {};
-  allAlerts.forEach(a => {
-    const det = alertDetails[a.id];
-    if (det) det.nodes.forEach(n => {
-      const b = (n.bank||'').replace('Bank-','').trim();
-      if (b) bankMap[b] = (bankMap[b]||0)+1;
-    });
-  });
-  const sortedB = Object.entries(bankMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if (dbCharts.banks) dbCharts.banks.destroy();
-  const bCtx = document.getElementById('chart-banks').getContext('2d');
-  if (sortedB.length) {
-    dbCharts.banks = new Chart(bCtx, {
-      type:'bar',
-      data:{ labels:sortedB.map(x=>getBankName(x[0])), datasets:[{ data:sortedB.map(x=>x[1]),
-        backgroundColor:'#2563EB', borderRadius:2 }]},
-      options:{ indexAxis:'y', plugins:{legend:{display:false}},
-        scales:{ x:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono'}}},
-                 y:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono',size:10}}} },
-        maintainAspectRatio:false }
-    });
-  }
-
-// Timeline — bin alerts by hour using totalMoved presence as proxy
-// Use alert index position as spread since we don't have timestamps in list
-const bins = new Array(48).fill(0), binsU = new Array(48).fill(0);
-const WIN = new Date('2022-09-01T00:00:00');
-allAlerts.forEach(a => {
-  // Try cached detail first
-  const det = alertDetails[a.id];
-  if (det?.transactions?.length) {
-    const ts = det.transactions[0].ts;
-    if (ts) {
-      const h = Math.floor((new Date(ts.replace(' ','T')) - WIN) / 3600000);
-      if (h >= 0 && h < 48) {
-        (a.source === 'unlabelled' ? binsU : bins)[h]++;
-        return;
-      }
-    }
-  }
-  // Fallback: distribute evenly across 48h using alert index
-  const idx = allAlerts.indexOf(a);
-  const h = idx % 48;
-  (a.source === 'unlabelled' ? binsU : bins)[h]++;
-});
-if (dbCharts.tl) dbCharts.tl.destroy();
-dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
-  type: 'line',
-  data: {
-    labels: Array.from({length:48}, (_,i) => `${i}h`),
-    datasets: [
-      { label:'Labelled',   data:bins,  borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,.12)', tension:.4, fill:true, pointRadius:2 },
-      { label:'Unlabelled', data:binsU, borderColor:'#7C3AED', backgroundColor:'rgba(124,58,237,.12)', tension:.4, fill:true, pointRadius:2 }
-    ]
-  },
-  options: {
-    plugins: { legend:{ labels:{ color:'#94A3B8', font:{size:10} } } },
-    scales: {
-      x: { ticks:{ color:'#94A3B8', maxTicksLimit:12, font:{size:10} } },
-      y: { min:0, ticks:{ color:'#94A3B8', font:{size:10}, precision:0 } }
-    },
-    maintainAspectRatio: false
-  }
-});
-  if (dbCharts.tl) dbCharts.tl.destroy();
-  dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
-    type:'line',
-    data:{ labels:Array.from({length:48},(_,i)=>`${i}h`),
-      datasets:[
-        { label:'Labelled', data:bins, borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,.08)', tension:.3, fill:true, pointRadius:2 },
-        { label:'Unlabelled', data:binsU, borderColor:'#7C3AED', backgroundColor:'rgba(124,58,237,.08)', tension:.3, fill:true, pointRadius:2 }
-      ]},
-    options:{ plugins:{legend:{labels:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{size:10}}}},
-      scales:{ x:{ticks:{color:'#475569',maxTicksLimit:12,font:{size:10}}},
-               y:{ticks:{color:'#475569',font:{size:10}}} },
-      maintainAspectRatio:false }
-  });
-
-  // Recent
-  document.getElementById('db-recent').innerHTML = allAlerts.slice(0,5).map(a => `
-    <div class="mini-card" onclick="jumpInvestigate('${a.id}')">
-      <div><div class="mini-card-name">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
-      <div class="mini-card-sub">${a.sub}</div></div>
-      <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-    </div>`).join('');
-
-  const cnt = {confirm:0,review:0,dismiss:0};
-  Object.values(decisions).forEach(d => { if(cnt[d.decision]!==undefined) cnt[d.decision]++; });
-  document.getElementById('dc-confirm').textContent = cnt.confirm;
-  document.getElementById('dc-review').textContent  = cnt.review;
-  document.getElementById('dc-dismiss').textContent = cnt.dismiss;
-  document.getElementById('dc-pending').textContent = allAlerts.length - Object.keys(decisions).length;
-}
-
-function jumpInvestigate(id) { showView('investigate'); loadAlertById(id); }
-
-function parseMoney(s) { return parseFloat((s||'').replace(/[$,]/g,''))||0; }
-function fmtMoney(n) {
-  if (n>=1e9) return `$${(n/1e9).toFixed(1)}B`;
-  if (n>=1e6) return `$${(n/1e6).toFixed(1)}M`;
-  if (n>=1e3) return `$${(n/1e3).toFixed(1)}K`;
-  return `$${n.toFixed(0)}`;
-}
-
-/* ════════════════════════════════════════════
-   INVESTIGATE SIDEBAR
-════════════════════════════════════════════ */
-function setSrc(v,el) {
-  srcFilter=v;
-  document.querySelectorAll('#src-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-function setSev(v,el) {
-  sevFilter=v;
-  document.querySelectorAll('#sev-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-
-function renderSidebar() {
-  const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
-  const filtered = allAlerts.filter(a => {
-    if (srcFilter!=='all' && a.source!==srcFilter) return false;
-    if (sevFilter!=='all' && a.severity!==sevFilter) return false;
-    if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
-             !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
-    return true;
-  });
-  const el = document.getElementById('alert-list');
-  if (!el) return;
-  el.innerHTML = filtered.map(a => {
-    const dec  = decisions[a.id];
-    const active = (currentAlert?.id === a.id) ? 'active' : '';
-    const sevCls = `sev-${a.severity}`;
-    const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
-    const conf   = Math.round((a.confidence||0)*100);
-    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
-    const mlBg  = mlPct>=70 ? 'var(--red-bg)'   : mlPct>=40 ? 'var(--amber-bg)'  : 'var(--green-bg)';
-    const mlClr = mlPct>=70 ? 'var(--red)'      : mlPct>=40 ? 'var(--amber)'     : 'var(--green)';
-    const mlBd  = mlPct>=70 ? 'var(--red-bd)'   : mlPct>=40 ? 'var(--amber-bd)'  : 'var(--green-bd)';
-    const mlBadge = mlPct != null ? `<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>` : '';
-    return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')">
-      ${decDot}
-      <div class="ac-name">${formatPatternName(a.patternType)}</div>
-      <div class="ac-badges">
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlBadge}
-      </div>
-      <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%"></div></div>
-      <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
-    </div>`;
-  }).join('');
-}
-
-/* ════════════════════════════════════════════
-   LOAD ALERT DETAIL
-════════════════════════════════════════════ */
-async function loadAlertById(id) {
-  if (!alertDetails[id]) {
-    try {
-      const r = await fetch(`${API_BASE}/alerts/${id}`);
-      if (!r.ok) return;
-      alertDetails[id] = await r.json();
-      renderDashboard();
-    } catch(e) { toast('Error loading alert','error'); return; }
-  }
-  currentAlert = alertDetails[id];
-  currentStep  = -1;
-  if (playTimer) { clearInterval(playTimer); playTimer=null; }
-  document.getElementById('play-btn').textContent = '▶ Play';
-
-  document.querySelectorAll('.ac').forEach(c=>c.classList.remove('active'));
-  const card = document.getElementById('ac_'+id);
-  if (card) { card.classList.add('active'); card.scrollIntoView({block:'nearest'}); }
-
-  // Route bar
-  const route = currentAlert.routeNodes||[];
-  document.getElementById('route-bar').innerHTML = route.map((n,i) =>
-    `<span class="route-pill" onclick="highlightNode('${n}')">${n}</span>${i<route.length-1?'<span class="route-arrow">→</span>':''}`
-  ).join('');
-
-  // Stats strip
-  document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
-  document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
-  document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = `${Math.round((currentAlert.confidence||0)*100)}%`;
-  document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
-
-  renderGraph();
-  renderRightPanel();
-  renderTimeline();
-  toast(`Loaded: ${formatPatternName(currentAlert.patternType)}`, 'info');
-}
-
-/* ════════════════════════════════════════════
-   GRAPH
-════════════════════════════════════════════ */
-const SEV_NODE = {
-  high:   { bg:'#FEF2F2', border:'#DC2626' },
-  medium: { bg:'#FFFBEB', border:'#D97706' },
-  low:    { bg:'#ECFDF5', border:'#059669' },
-};
-const FMT_EDGE = { RTGS:'#2563EB', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
-
-const BANK_NAMES = [
-  'Apex National Bank','Meridian Trust Co.','Pinnacle Savings Bank',
-  'Harbor Commercial Bank','Summit Finance Corp','Central Mutual Bank',
-  'Pacific Trade Bank','Atlantic Financial Group','Inland Credit Union',
-  'Horizon Cooperative Bank','Unity Savings Bank','Frontier Banking Corp',
-  'Capital Fidelity Bank','Westpoint Savings','Northern Mutual Bank',
-  'Eastern Finance Group','Global Commerce Bank','Premier Credit Bank',
-  'Allied Banking Corp','First National Trust',
-];
-function getBankName(raw) {
-  if (!raw) return raw;
-  const id = String(raw).replace('Bank-','').trim();
-  const n  = parseInt(id, 10);
-  if (isNaN(n)) return id;
-  return BANK_NAMES[n % BANK_NAMES.length];
-}
-
-function getLayout(alert) {
-  if (!alert) return { name:'cose', padding:30, animate:false };
-  const pt    = alert.patternType;
-  const nodes = alert.nodes || [];
-
-  if (pt === 'fanOut') {
-    const dist = nodes.find(n => n.role === 'Distributor') || nodes[0];
-    return {
-      name: 'breadthfirst', directed: true,
-      roots: dist ? [`#${dist.id}`] : undefined,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
-    };
-  }
-
-  if (pt === 'fanIn') {
-    // Reverse direction: use the aggregator as the root and flip edge direction visually
-    // breadthfirst from all senders naturally converges when we don't specify roots
-    return {
-      name: 'breadthfirst', directed: false,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
-    };
-  }
-
-  if (pt === 'cycle') {
-    return { name: 'circle', padding: 30, spacingFactor: 1.3, avoidOverlap: true };
-  }
-
-  if (pt === 'bipartite') {
-    const coords  = nodes.filter(n => n.role === 'Coordinator');
-    const targets = nodes.filter(n => n.role === 'Joint Target');
-    const root = coords.length ? coords.map(n => `#${n.id}`) : undefined;
-    return {
-      name: 'breadthfirst', directed: true,
-      roots: root,
-      padding: 40, spacingFactor: 1.8, avoidOverlap: true
-    };
-  }
-
-  if (pt === 'scatterGather' || pt === 'gatherScatter') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.8, avoidOverlap: true };
-  }
-
-  if (pt === 'stack') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.5, avoidOverlap: true };
-  }
-
-  return { name: 'cose', padding: 30, animate: false, nodeRepulsion: 4500 };
-}
-function renderGraph() {
-  if (!currentAlert) return;
-  if (cy) cy.destroy();
-
-  const elements = [];
-  currentAlert.nodes.forEach(n => {
-    const c = SEV_NODE[n.sev]||SEV_NODE.low;
-    elements.push({ data:{ id:n.id, label:n.id, sev:n.sev, role:n.role,
-      bank:n.bank, vol:n.vol, txn:n.txn }, style:{
-      'background-color':c.bg, 'border-color':c.border,
-    }});
-  });
-  currentAlert.edges.forEach(e => {
-    const fmt = (currentAlert.transactions[e.txIdx]||{}).fmt||'';
-    elements.push({ data:{ id:e.id, source:e.source, target:e.target,
-      label:e.label, txIdx:e.txIdx, fmt } });
-  });
-
-  cy = cytoscape({
-    container: document.getElementById('cy'),
-    elements,
-    style:[
-      { selector:'node', style:{
-        'background-color':'data(background-color)',
-        'border-color':'data(border-color)',
-        'border-width':2, 'color':'#0F172A',
-        'font-size':9, 'font-family':'DM Mono, monospace',
-        'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
-      }},
-      { selector:'edge', style:{
-        'line-color': e => FMT_EDGE[e.data('fmt')]||'#94A3B8',
-        'target-arrow-color': e => FMT_EDGE[e.data('fmt')]||'#94A3B8',
-        'target-arrow-shape':'triangle', 'curve-style':'bezier',
-        'width':1.5, 'font-size':8, 'color':'#475569',
-        'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
-        'text-background-opacity':.9,
-        'text-background-padding':2,
-      }},
-      { selector:'node', style:{
-        'background-color': ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).bg,
-        'border-color':     ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).border,
-      }},
-      { selector:'.hl-edge', style:{ 'line-color':'#2563EB','target-arrow-color':'#2563EB','width':3 } },
-      { selector:'.dim', style:{ opacity:0.15 } },
-    ],
-    layout: getLayout(currentAlert),
-    userZoomingEnabled:true, userPanningEnabled:true,
-  });
-
-  cy.on('mouseover','node', e => {
-    const n = e.target.data();
-    const pos = e.renderedPosition;
-    const box = document.getElementById('cy').getBoundingClientRect();
-    const tt  = document.getElementById('tooltip');
-    tt.style.left = (box.left+pos.x+16)+'px';
-    tt.style.top  = (box.top+pos.y-20)+'px';
-    tt.style.display='block';
-    document.getElementById('tt-id').textContent   = n.id;
-    document.getElementById('tt-bank').textContent = getBankName(n.bank)||'—';
-    document.getElementById('tt-role').textContent = n.role||'—';
-    document.getElementById('tt-vol').textContent  = n.vol||'—';
-    document.getElementById('tt-txn').textContent  = n.txn||'—';
-  });
-  cy.on('mouseout','node', () => document.getElementById('tooltip').style.display='none');
-  cy.on('tap','node', e => highlightNode(e.target.id()));
-}
-
-function highlightNode(id) {
-  if (!cy) return;
-  resetHighlight();
-  cy.nodes(`[id="${id}"]`).style({'border-width':4});
-  cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
-  document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
-}
-function resetHighlight() {
-  if (!cy) return;
-  cy.elements().removeClass('dim hl-edge');
-  cy.nodes().style({'border-width':2});
-  document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
-}
-function downloadPNG() {
-  if (!cy) return;
-  const a = document.createElement('a');
-  a.href = cy.png({scale:2, bg:'#F8FAFC'});
-  a.download = `aml-${currentAlert?.id||'graph'}.png`; a.click();
-}
-
-/* ════════════════════════════════════════════
-   TIMELINE
-════════════════════════════════════════════ */
-function renderTimeline() {
-  updateCounter(); renderDots();
-  if (currentAlert?.transactions?.length) applyStep(0);
-}
-function applyStep(idx) {
-  if (!currentAlert) return;
-  const txns = currentAlert.transactions;
-  if (idx<0||idx>=txns.length) return;
-  currentStep = idx;
-  const tx = txns[idx];
-  document.getElementById('tl-card').innerHTML = `
-    <div class="tl-route">
-      <span style="color:var(--blue)">${tx.from}</span>
-      <span style="color:var(--light)">→</span>
-      <span style="color:var(--green)">${tx.to}</span>
-      <span class="badge badge-teal">${tx.fmt||'—'}</span>
-    </div>
-    <div class="tl-details">
-      <span>Paid: <strong>${tx.paid}</strong></span>
-      <span>Recv: <strong>${tx.recv}</strong></span>
-      <span>${tx.fromBank} → ${tx.toBank}</span>
-      <span>${tx.ts||'—'}</span>
-    </div>`;
-  if (cy) {
-    cy.edges().removeClass('hl-edge');
-    const me = currentAlert.edges.find(e=>e.txIdx===idx);
-    if (me) cy.edges(`[id="${me.id}"]`).addClass('hl-edge');
-  }
-  updateCounter(); renderDots();
-}
-function stepBy(d) {
-  if (!currentAlert) return;
-  const n = currentStep+d;
-  if (n>=0&&n<currentAlert.transactions.length) applyStep(n);
-}
-function tlPlay() {
-  if (!currentAlert) return;
-  if (playTimer) {
-    clearInterval(playTimer); playTimer=null;
-    document.getElementById('play-btn').textContent='▶ Play';
-  } else {
-    document.getElementById('play-btn').textContent='⏸ Pause';
-    playTimer = setInterval(()=>{
-      if (currentStep<currentAlert.transactions.length-1) { currentStep++; applyStep(currentStep); }
-      else { clearInterval(playTimer); playTimer=null; document.getElementById('play-btn').textContent='▶ Play'; }
-    },1500);
-  }
-}
-function updateCounter() {
-  const t = currentAlert ? currentAlert.transactions.length : 0;
-  document.getElementById('tl-counter').textContent = t ? `${currentStep<0?'—':currentStep+1} / ${t}` : '— / —';
-}
-function renderDots() {
-  const t = currentAlert ? currentAlert.transactions.length : 0;
-  document.getElementById('tl-dots').innerHTML = Array.from({length:t},(_,i)=>
-    `<div class="tl-dot ${i<currentStep?'visited':''} ${i===currentStep?'current':''}" onclick="applyStep(${i})"></div>`
-  ).join('');
-}
-
-/* ════════════════════════════════════════════
-   RIGHT PANEL
-════════════════════════════════════════════ */
-function renderRightPanel() {
-  if (!currentAlert) return;
-  const a = currentAlert;
-  const sevColor = SEV_COLOR[a.severity]||'var(--muted)';
-
-  document.getElementById('ir-pattern-sec').innerHTML = `
-    <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-      <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-      <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-      <span class="badge badge-light">${Math.round((a.confidence||0)*100)}% CONF</span>
-      ${a.mlScore != null ? `<span class="badge" style="background:${a.mlScore>=0.7?'var(--red-bg)':a.mlScore>=0.4?'var(--amber-bg)':'var(--green-bg)'};color:${a.mlScore>=0.7?'var(--red)':a.mlScore>=0.4?'var(--amber)':'var(--green)'};border:1px solid ${a.mlScore>=0.7?'var(--red-bd)':a.mlScore>=0.4?'var(--amber-bd)':'var(--green-bd)'}">🤖 ML ${Math.round(a.mlScore*100)}%</span>` : ''}
-    </div>
-    <div class="ir-desc">${a.description||''}</div>`;
-
-  // Source / signals
-  const srcEl = document.getElementById('ir-source-sec');
-  srcEl.style.display='block';
-  const sigs = a.signalsTriggered||[];
-  let srcHtml = `<span class="label-up">Detection Source</span>`;
-  if (a.source==='labelled') {
-    srcHtml += `<div class="signal-chip blue">🏷 Is Laundering label filter</div>`;
-  } else if (a.source==='both') {
-    srcHtml += `<div class="signal-chip" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)">⭐ Cross-validated by both modes</div>`;
-  } else {
-    srcHtml += sigs.map(s=>`<div class="signal-chip">${SIGNAL_ICONS[s]||'•'} ${s}</div>`).join('') ||
-      `<span style="color:var(--light);font-size:11px;font-family:var(--mono)">No signals recorded</span>`;
-  }
-  srcEl.innerHTML = srcHtml;
-
-  // Roles
-  const roleEl = document.getElementById('ir-roles-sec');
-  roleEl.style.display='block';
-  const roleCnt = {};
-  (a.nodes||[]).forEach(n=>{ roleCnt[n.role]=(roleCnt[n.role]||{count:0,sev:n.sev}); roleCnt[n.role].count++; });
-  const roleColors = {high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
-  roleEl.innerHTML = `<span class="label-up">Node Roles</span>` +
-    Object.entries(roleCnt).map(([role,{count,sev}])=>
-      `<div class="role-row"><div class="role-dot" style="background:${roleColors[sev]||'#94A3B8'}"></div>
-       <span>${role}</span><span style="color:var(--muted);margin-left:auto">×${count}</span></div>`
-    ).join('');
-
-  renderDecStatus();
-}
-
-function renderDecStatus() {
-  if (!currentAlert) return;
-  const dec = decisions[currentAlert.id];
-  const el  = document.getElementById('dec-status-box');
-  if (dec) {
-    el.style.display='block';
-    el.className = `dec-status-box ${dec.decision}`;
-    el.textContent = {confirm:'✓ Confirmed',review:'⚠ Needs Review',dismiss:'✗ Dismissed'}[dec.decision]||dec.decision;
-  } else { el.style.display='none'; }
-}
-
-/* ════════════════════════════════════════════
-   DECISIONS
-════════════════════════════════════════════ */
-async function postDecision(decision) {
-  if (!currentAlert) return;
-  const reason = document.getElementById('dec-reason').value||'';
-  try {
-    const r = await fetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({decision,reason})
-    });
-    const d = await r.json();
-    if (d.status==='saved') {
-      decisions[currentAlert.id]={decision,reason};
-      renderSidebar(); renderDecStatus(); renderDashboard();
-      document.querySelectorAll('.ac').forEach(c=>c.classList.remove('active'));
-      document.getElementById('ac_'+currentAlert.id)?.classList.add('active');
-      toast(`Decision saved: ${decision} ✓`,'success');
-    }
-  } catch(e){ toast('Error saving decision','error'); }
-}
-
-/* ════════════════════════════════════════════
-   CASE MANAGER
-════════════════════════════════════════════ */
-function setCaseFilter(v,el) {
-  caseFilter=v;
-  document.querySelectorAll('#case-filters .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderCaseManager();
-}
-function renderCaseManager() {
-  const rows = allAlerts.filter(a=>{
-    const dec=decisions[a.id]; if(!dec) return false;
-    return caseFilter==='all'||dec.decision===caseFilter;
-  });
-  const tbody = document.getElementById('cases-tbody');
-  const empty = document.getElementById('cases-empty');
-  if (!rows.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  tbody.innerHTML = rows.map(a=>{
-    const dec=decisions[a.id];
-    const decColors={confirm:'var(--green)',review:'var(--amber)',dismiss:'var(--red)'};
-    return `<tr>
-      <td style="font-size:10px;color:var(--muted);font-family:var(--mono)">${a.id}</td>
-      <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType)}</td>
-      <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span></td>
-      <td>${Math.round((a.confidence||0)*100)}%</td>
-      <td>${a.totalMoved}</td>
-      <td><span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span></td>
-      <td style="color:${decColors[dec.decision]};font-weight:600;font-family:var(--sans)">${dec.decision.toUpperCase()}</td>
-      <td style="color:var(--muted);font-size:11px">${dec.reason||'—'}</td>
-      <td><button class="btn btn-ghost" style="font-size:10px;padding:4px 8px" onclick="jumpInvestigate('${a.id}')">Re-open</button></td>
-    </tr>`;
-  }).join('');
-}
-function exportCSV() {
-  const rows = allAlerts.filter(a=>decisions[a.id]);
-  if (!rows.length) { toast('No decisions to export','warning'); return; }
-  const hdr = 'Alert ID,Pattern,Severity,Confidence,Total Moved,Source,Decision,Reason';
-  const lines = rows.map(a=>{
-    const d=decisions[a.id];
-    return [a.id,formatPatternName(a.patternType),a.severity,`${Math.round((a.confidence||0)*100)}%`,
-      a.totalMoved,a.source||'',d.decision,(d.reason||'').replace(/,/g,' ')].join(',');
-  });
-  const blob=new Blob([[hdr,...lines].join('\n')],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const l=document.createElement('a'); l.href=url; l.download='aml-cases.csv';
-  l.click(); URL.revokeObjectURL(url);
-  toast('Export ready','success');
-}
-
-/* ════════════════════════════════════════════
-   SEARCH
-════════════════════════════════════════════ */
-function doSearch() {
-  const q = (document.getElementById('search-inp').value||'').trim();
-  // Clear any active filter pill
-  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
-  runSearch(q, 'auto');
-}
-
-function qFilter(val, type='pat') {
-  const patDisplayMap = {
-    fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
-    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK',
-  };
-  // Highlight the active pill
-  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-  // Show formatted name in input, clear it for sev/src filters
-  document.getElementById('search-inp').value = (type==='pat' && patDisplayMap[val]) ? patDisplayMap[val] : '';
-  runSearch(val, type);
-}
-
-// Normalise a string for fuzzy matching: lowercase, replace hyphens/underscores/spaces
-function normStr(s) { return String(s).replace(/[-_\s]/g,'').toLowerCase(); }
-
-function runSearch(q, type='auto') {
-  const container = document.getElementById('search-results');
-
-  // type='all' — show everything (used when opening the tab)
-  let res;
-  if (type === 'all' || (!q && type !== 'sev' && type !== 'src' && type !== 'pat')) {
-    res = allAlerts.slice();
-  } else {
-    const lq = q.toLowerCase().trim();
-    res = allAlerts.filter(a => {
-      if (type === 'sev') return a.severity === lq.toUpperCase();
-      if (type === 'src') return a.source === lq;
-      if (type === 'pat') {
-        // Direct patternType match — normalise both sides so fanIn/FAN-IN/fan_in all work
-        return normStr(a.patternType) === normStr(lq);
-      }
-      // Free-text: normalise query so "fan in" / "fan-in" / "fanin" all match
-      const nq = normStr(lq);
-      const det = alertDetails[a.id];
-      const nodes = (det ? det.nodes.map(n => n.id).join(' ') : '') || '';
-      const banks = (det ? det.nodes.map(n => getBankName(n.bank||'')).join(' ') : '') || '';
-      return normStr(formatPatternName(a.patternType)).includes(nq) ||
-        normStr(a.name||'').includes(nq) ||
-        a.id.toLowerCase().includes(lq) ||
-        (a.sub||'').toLowerCase().includes(lq) ||
-        nodes.toLowerCase().includes(lq) ||
-        banks.toLowerCase().includes(lq);
-    });
-  }
-
-  if (!res.length) {
-    container.innerHTML = `<div class="search-empty">No alerts match "${q}"</div>`;
-    return;
-  }
-
-  // Result count header + cards
-  const header = `<div style="grid-column:1/-1;font-family:var(--mono);font-size:11px;
-    color:var(--muted);margin-bottom:4px">${res.length} alert${res.length!==1?'s':''} found</div>`;
-
-  const cards = res.map(a => {
-    // Always use a.name (set by serializer from PATTERN_NAME) for the card title
-    const patLabel = a.name || formatPatternName(a.patternType);
-    const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
-    const mlBg  = mlPct != null ? (mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)') : '';
-    const mlClr = mlPct != null ? (mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)') : '';
-    const mlBd  = mlPct != null ? (mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)') : '';
-    return `
-    <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
-         onclick="jumpInvestigate('${a.id}')">
-      <div style="font-family:var(--sans);font-weight:700;font-size:13px;margin-bottom:6px;color:var(--text)">
-        ${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}
-      </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlPct!=null?`<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>`:''}
-      </div>
-      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">${a.sub||''}</div>
-      <div style="font-size:11px;color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
-    </div>`;
-  }).join('');
-
-  container.innerHTML = header + cards;
-}
-
-/* ════════════════════════════════════════════
-   VALIDATION
-════════════════════════════════════════════ */
-async function loadValidation() {
-  try {
-    const r=await fetch(`${API_BASE}/validation`);
-    if (!r.ok) {
-      document.getElementById('val-compare-body').innerHTML=
-        `<tr><td colspan="5" style="color:var(--red);padding:16px">Run validator.py first to generate validation data.</td></tr>`;
-      return;
-    }
-    renderValidation(await r.json());
-  } catch(e) {
-    document.getElementById('val-compare-body').innerHTML=
-      `<tr><td colspan="5" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
-  }
-}
-function setRing(circleId,pctId,val,color) {
-  const pct=Math.min(1,Math.max(0,val));
-  const el=document.getElementById(circleId);
-  if(el) el.setAttribute('stroke-dashoffset',(276*(1-pct)).toFixed(1));
-  const pe=document.getElementById(pctId);
-  if(pe) pe.textContent=`${Math.round(pct*100)}%`;
-}
-function renderValidation(data) {
-  const lab=data.labelled||{}, unlab=data.unlabelled||{};
-  setRing('ring-lab','ring-lab-pct',lab.overall_precision||0,'#2563EB');
-  setRing('ring-unlab','ring-unlab-pct',unlab.overall_precision||0,'#7C3AED');
-  document.getElementById('val-compare-body').innerHTML=`
-    <tr><td style="font-family:var(--sans);font-weight:600">Labelled</td>
-        <td>${lab.total_alerts||0}</td><td>${lab.matched||0}</td>
-        <td>${pct(lab.overall_precision)}</td><td>${pct(lab.overall_recall)}</td></tr>
-    <tr><td style="font-family:var(--sans);font-weight:600">Unlabelled</td>
-        <td>${unlab.total_alerts||0}</td><td>${unlab.matched||0}</td>
-        <td>${pct(unlab.overall_precision)}</td><td>${pct(unlab.overall_recall)}</td></tr>
-    <tr style="border-top:2px solid var(--border)">
-        <td style="color:var(--amber);font-weight:600">Overlap</td>
-        <td style="color:var(--amber)">${data.overlap_count||0}</td>
-        <td>—</td><td>—</td><td>—</td></tr>`;
-  const prec=lab.per_pattern_precision||{}, rec=lab.per_pattern_recall||{};
-  const recs=lab.records||[];
-  const det={}, corr={};
-  recs.forEach(r=>{ det[r.detected_type]=(det[r.detected_type]||0)+1; if(r.status==='correct') corr[r.detected_type]=(corr[r.detected_type]||0)+1; });
-  document.getElementById('val-prec-body').innerHTML=Object.entries(prec).map(([pt,p])=>`
-    <tr><td>${pt}</td><td>${det[pt]||0}</td><td>${corr[pt]||0}</td>
-    <td><div style="display:flex;align-items:center;gap:8px">
-      <div class="prec-bar-bg" style="width:80px"><div class="prec-bar-fill" style="width:${(p*100).toFixed(0)}%"></div></div>${pct(p)}
-    </div></td></tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted)">No data</td></tr>';
-  document.getElementById('val-recall-body').innerHTML=Object.entries(rec).map(([pt,r])=>`
-    <tr><td>${pt}</td><td>?</td><td>${Math.round(r*10)}</td>
-    <td><div style="display:flex;align-items:center;gap:8px">
-      <div class="prec-bar-bg" style="width:80px"><div class="prec-bar-fill" style="width:${(r*100).toFixed(0)}%;background:var(--purple)"></div></div>${pct(r)}
-    </div></td></tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted)">No data</td></tr>';
-}
-function pct(v){ return v!=null?`${Math.round((v||0)*100)}%`:'—'; }
-
-/* ════════════════════════════════════════════
-   WHITELIST
-════════════════════════════════════════════ */
-async function loadWhitelist() {
-  const [wlRes, suppRes] = await Promise.all([
-    fetch(`${API_BASE}/whitelist`).then(r=>r.json()).catch(()=>null),
-    fetch(`${API_BASE}/alerts/suppressed`).then(r=>r.json()).catch(()=>[]),
-  ]);
-  if (wlRes) renderWhitelistPanel(wlRes);
-  renderSuppressed(Array.isArray(suppRes) ? suppRes : []);
-}
-
-function renderWhitelistPanel(wl) {
-  // Exempt accounts
-  const accs = wl.exempt_accounts||[];
-  document.getElementById('wl-accounts-list').innerHTML = accs.length
-    ? accs.map(a=>`<div class="wl-account-item">${a}
-        <button class="wl-remove-btn" onclick="removeWhitelistAccount('${a}')">×</button></div>`).join('')
-    : `<span style="color:var(--light);font-size:11px;font-family:var(--mono)">No accounts explicitly whitelisted</span>`;
-
-  // Exempt banks
-  document.getElementById('wl-banks-list').innerHTML = (wl.exempt_banks||[])
-    .map(b=>`<span class="badge badge-teal">${b}</span>`).join('');
-
-  // Rules
-  const rules = wl.exemption_rules||{};
-  document.getElementById('wl-rules-list').innerHTML = Object.entries(rules).map(([pat,rule])=>`
-    <div class="wl-rule-item">
-      <div class="wl-rule-pattern">${pat}</div>
-      <div class="wl-rule-reason">${rule.reason}</div>
-      <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">
-        ${(rule.exempt_if||[]).map(c=>`<span class="badge badge-light">${c}</span>`).join('')}
-      </div>
-    </div>`).join('');
-}
-
-function renderSuppressed(suppressed) {
-  const tbody=document.getElementById('suppressed-tbody');
-  const empty=document.getElementById('suppressed-empty');
-  document.getElementById('suppressed-count').textContent=`${suppressed.length} alert${suppressed.length!==1?'s':''}`;
-  if (!suppressed.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-  tbody.innerHTML=suppressed.map(a=>`<tr>
-    <td style="font-size:10px;color:var(--muted);font-family:var(--mono)">${a.id}</td>
-    <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType||'')}</td>
-    <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity||'—'}</span></td>
-    <td style="font-size:11px;color:var(--muted)">${a.exemption_reason||'—'}</td>
-    <td style="font-size:11px;color:var(--muted)">${(a.exempt_accounts||[]).join(', ')||'—'}</td>
-    <td><button class="btn btn-ghost" style="font-size:10px;padding:4px 8px" onclick="jumpInvestigate('${a.id}')">View</button></td>
-  </tr>`).join('');
-}
-
-async function addWhitelistAccount() {
-  const id=(document.getElementById('wl-account-inp').value||'').trim();
-  if (!id) { toast('Enter an account ID','warning'); return; }
-  const reason=(document.getElementById('wl-reason-inp').value||'').trim();
-  try {
-    const r=await fetch(`${API_BASE}/whitelist/account`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({account_id:id,reason})
-    });
-    const d=await r.json();
-    document.getElementById('wl-account-inp').value='';
-    document.getElementById('wl-reason-inp').value='';
-    renderWhitelistPanel(d.whitelist);
-    toast(`Added ${id} to whitelist`,'success');
-  } catch(e){ toast('Error adding to whitelist','error'); }
-}
-
-async function removeWhitelistAccount(id) {
-  try {
-    await fetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
-    await loadWhitelist();
-    toast(`Removed ${id} from whitelist`,'success');
-  } catch(e){ toast('Error removing from whitelist','error'); }
-}
-
-/* ════════════════════════════════════════════
-   TOAST
-════════════════════════════════════════════ */
-function toast(msg, type='info') {
-  const container=document.getElementById('toasts');
-  const el=document.createElement('div');
-  el.className=`toast ${type}`; el.textContent=msg;
-  container.appendChild(el);
-  const all=container.querySelectorAll('.toast');
-  if (all.length>3) all[0].remove();
-  requestAnimationFrame(()=>el.classList.add('show'));
-  setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },3000);
-}
-
-/* ═══ BOOT ═══ */
-init();
-</script>
+<script src="/static/app.js"></script>
 </body>
 </html>
