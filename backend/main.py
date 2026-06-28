@@ -16,6 +16,7 @@ from whitelist import (
     DEFAULT_WHITELIST,
 )
 from log_setup import setup_logging
+import db
 
 logger     = logging.getLogger("uvicorn.error")
 DATA_DIR   = Path(__file__).parent.parent / "data"
@@ -142,10 +143,11 @@ def _check_drift(ml_scores: list) -> None:
 
 
 def _run_pipeline():
-    global ALERTS, SUPPRESSED, PIPELINE_ERROR, ML_METRICS, DECISION_THRESHOLD
+    global ALERTS, SUPPRESSED, PIPELINE_ERROR, ML_METRICS, DECISION_THRESHOLD, DECISIONS
 
     try:
         if _load_cache():
+            DECISIONS = db.current_decisions()
             PIPELINE_READY.set()
             return
 
@@ -159,6 +161,11 @@ def _run_pipeline():
         SUPPRESSED = {}
 
         logger.info(f"Multi-GNN alerts: {len(ALERTS)} clusters")
+
+        # Persist alerts and restore the analyst decision audit trail from SQLite.
+        import time as _time
+        db.replace_alerts(serialized, scan_id=str(int(_time.time())))
+        DECISIONS = db.current_decisions()
 
         _check_drift([a["mlScore"] for a in serialized if a.get("mlScore") is not None])
         _save_cache()
@@ -175,6 +182,7 @@ def _run_pipeline():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ensure_data_dir()
+    db.init_db()
     log_paths = setup_logging(LOGS_DIR)
     logger.info(f"Error logs -> {log_paths['error_logs']}")
     logger.info(f"Training logs -> {log_paths['training_logs']}")
@@ -267,14 +275,30 @@ def get_alert(alert_id: str):
 class DecisionBody(BaseModel):
     decision: str
     reason: str = ""
+    analyst: str = ""
 
 
 @app.post("/alerts/{alert_id}/decision")
 def post_decision(alert_id: str, body: DecisionBody):
     if alert_id not in ALERTS:
         raise HTTPException(status_code=404, detail="Alert not found")
+    # Append to the immutable SQLite audit log, then refresh the in-memory view.
+    db.record_decision(alert_id, body.decision, body.reason, body.analyst)
     DECISIONS[alert_id] = {"decision": body.decision, "reason": body.reason}
     return {"status": "saved", "alert_id": alert_id, "decision": body.decision}
+
+
+@app.get("/alerts/{alert_id}/decision/history")
+def get_decision_history(alert_id: str):
+    """Full chronological audit trail of every decision made on this alert."""
+    return {"alert_id": alert_id, "history": db.decision_history(alert_id)}
+
+
+@app.get("/decisions")
+def get_decisions():
+    """Current analyst decision per alert (latest row from the audit log).
+    The frontend hydrates from this on load so decisions survive restarts."""
+    return db.current_decisions()
 
 
 # ── whitelist endpoints ───────────────────────────────────────────────────────

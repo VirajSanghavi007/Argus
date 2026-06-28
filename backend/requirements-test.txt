@@ -1,0 +1,12 @@
+# Lightweight deps for CI — everything the test suite needs WITHOUT the heavy
+# ML stack (torch / torch-geometric). The one test that needs torch skips itself.
+# Lower-bound floors (not exact pins) so pip resolves a compatible wheel for each
+# Python version in the CI matrix (3.11 / 3.12).
+fastapi>=0.104
+uvicorn>=0.24
+pydantic>=2.5
+numpy>=1.26
+pandas>=2.1
+networkx>=3.1
+httpx>=0.25,<0.28
+pytest>=7.4

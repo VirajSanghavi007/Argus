@@ -6,13 +6,29 @@ on:
   push:
     branches: [main]
 
+# Cancel superseded runs on the same branch to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - run: pip install -r backend/requirements.txt
-      - run: pytest backend/tests/ -v
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: pip install -r backend/requirements-test.txt
+
+      - name: Run test suite
+        run: pytest backend/tests/ -v --tb=short

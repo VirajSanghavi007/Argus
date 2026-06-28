@@ -413,6 +413,15 @@ async function pollUntilReady() {
 async function loadAllAlerts() {
   const r = await fetch(`${API_BASE}/alerts`);
   allAlerts = await r.json();
+  await loadDecisions();
+}
+
+// Hydrate analyst decisions from the persistent audit log so they survive restarts.
+async function loadDecisions() {
+  try {
+    const r = await fetch(`${API_BASE}/decisions`);
+    if (r.ok) decisions = await r.json();
+  } catch (e) { /* non-fatal — decisions stay empty */ }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
