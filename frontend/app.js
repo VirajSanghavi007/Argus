@@ -508,8 +508,7 @@ function renderDashboard() {
     type:'line',
     data:{ labels:Array.from({length:48},(_,i)=>`${i}h`),
       datasets:[
-        { label:'Labelled', data:bins, borderColor:'#00579C', backgroundColor:'rgba(0,87,156,.08)', tension:.3, fill:true, pointRadius:2 },
-        { label:'Unlabelled', data:binsU, borderColor:'#7C3AED', backgroundColor:'rgba(124,58,237,.08)', tension:.3, fill:true, pointRadius:2 }
+        { label:'Alerts', data:bins, borderColor:'#00579C', backgroundColor:'rgba(0,87,156,.08)', tension:.3, fill:true, pointRadius:2 }
       ]},
     options:{ plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
       scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
