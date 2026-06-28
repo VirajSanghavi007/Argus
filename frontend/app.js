@@ -1,26 +1,7 @@
 /* ════════════════════════════════════════════
-   SECURITY — disable copy/paste/screenshot
+   SESSION TITLE
 ════════════════════════════════════════════ */
-document.addEventListener('copy',       e => e.preventDefault());
-document.addEventListener('cut',        e => e.preventDefault());
-document.addEventListener('paste',      e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); });
-document.addEventListener('contextmenu',e => e.preventDefault());
-document.addEventListener('keydown', e => {
-  // Block PrintScreen
-  if (e.key === 'PrintScreen') { e.preventDefault(); return; }
-  // Block Ctrl+P (print), Ctrl+S (save), Ctrl+U (view source), Ctrl+Shift+I (devtools)
-  if (e.ctrlKey && ['p','s','u'].includes(e.key.toLowerCase())) { e.preventDefault(); return; }
-  if (e.ctrlKey && e.shiftKey && ['i','j','c'].includes(e.key.toLowerCase())) { e.preventDefault(); return; }
-  if (e.key === 'F12') { e.preventDefault(); return; }
-});
-// Blur page on visibility change to defeat screen capture APIs
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    document.title = 'AML Intelligence — Session Locked';
-  } else {
-    document.title = 'AML Intelligence Platform';
-  }
-});
+document.title = 'AML Intelligence Platform';
 
 /* ════════════════════════════════════════════
    AUTHENTICATION

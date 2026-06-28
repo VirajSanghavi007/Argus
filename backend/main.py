@@ -157,10 +157,13 @@ def _run_pipeline():
         serialized, ML_METRICS = run_multignn_pipeline(max_rows=MULTIGNN_MAX_ROWS)
         DECISION_THRESHOLD = float(ML_METRICS.get("threshold", 0.5))
 
-        ALERTS     = {a["id"]: a for a in serialized}
-        SUPPRESSED = {}
+        # Apply whitelist filtering: suppressed alerts are exempt per bank/pattern rules.
+        wl = load_whitelist()
+        kept, suppressed = filter_alerts(serialized, wl)
+        ALERTS     = {a["id"]: a for a in kept}
+        SUPPRESSED = {a["id"]: a for a in suppressed}
 
-        logger.info(f"Multi-GNN alerts: {len(ALERTS)} clusters")
+        logger.info(f"Multi-GNN alerts: {len(kept)} kept, {len(suppressed)} suppressed (whitelist)")
 
         # Persist alerts and restore the analyst decision audit trail from SQLite.
         import time as _time
@@ -218,10 +221,18 @@ def status():
     for a in ALERTS.values():
         pt = a["patternType"]
         patterns[pt] = patterns.get(pt, 0) + 1
+
+    # Count alerts by source for the dashboard tile.
+    labelled = sum(1 for a in ALERTS.values() if a.get("source") == "labelled")
+    unlabelled = sum(1 for a in ALERTS.values() if a.get("source") == "unlabelled")
+
     result = {
         "status":           "error" if (ready and PIPELINE_ERROR) else ("ready" if ready else "loading"),
         "alert_count":      len(ALERTS),
         "suppressed_count": len(SUPPRESSED),
+        "labelled_count":   labelled,
+        "unlabelled_count": unlabelled,
+        "overlap_count":    0,
         "patterns":         patterns,
     }
     if PIPELINE_ERROR:

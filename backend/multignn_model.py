@@ -245,7 +245,7 @@ class MultiGNN(nn.Module):
     capturing richer neighborhood structure than GINEConv's sum-only aggregation.
     """
 
-    def __init__(self, node_dim=4, edge_cont_dim=5, n_currencies=16, n_formats=8,
+    def __init__(self, node_dim=4, edge_cont_dim=12, n_currencies=16, n_formats=8,
                  hidden=64, layers=3, dropout=0.2, emb_dim=8, deg=None):
         super().__init__()
         self.cur_emb = nn.Embedding(n_currencies + 1, emb_dim)
