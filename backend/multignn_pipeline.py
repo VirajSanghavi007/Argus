@@ -1,0 +1,237 @@
+"""
+Multi-GNN detection pipeline — the sole alert source.
+
+Flow:
+  1. Build the transaction multigraph and score every edge with the Multi-GNN.
+  2. Keep edges whose laundering probability >= threshold.
+  3. Group connected flagged edges into clusters (one cluster = one alert).
+  4. Classify each cluster's topology into an AML pattern type.
+  5. Serialize clusters into the alert shape the frontend renders.
+"""
+
+import logging
+from collections import defaultdict
+
+import networkx as nx
+import numpy as np
+
+from multignn_model import build_graph, load_multignn, score_transactions
+from serializer import serialize_alerts
+
+logger = logging.getLogger("uvicorn.error")
+
+MIN_CLUSTER_NODES = 2
+
+
+# ── Topology-based pattern labeller ─────────────────────────────────────────
+
+PATTERN_DESCRIPTIONS = {
+    "FAN_OUT":         "Single account distributes funds to many recipients",
+    "FAN_IN":          "Multiple accounts funnel funds into a single collector",
+    "CYCLE":           "Circular flow — money returns to its origin",
+    "SCATTER_GATHER":  "Funds fan out through intermediaries then reconverge",
+    "GATHER_SCATTER":  "Hub collects from many sources then redistributes",
+    "BIPARTITE":       "Two distinct groups with cross-group transfers only",
+    "STACK":           "Linear chain of sequential transfers (layering)",
+    "RANDOM":          "Complex topology — no single dominant pattern",
+}
+
+
+def _classify_topology(sub: nx.DiGraph) -> str:
+    nodes = list(sub.nodes())
+    n = len(nodes)
+    if n < 2:
+        return "RANDOM"
+
+    in_deg = dict(sub.in_degree())
+    out_deg = dict(sub.out_degree())
+
+    if all(in_deg[v] == 1 and out_deg[v] == 1 for v in nodes):
+        try:
+            nx.find_cycle(sub)
+            return "CYCLE"
+        except nx.NetworkXNoCycle:
+            pass
+
+    hubs_out = [v for v in nodes if out_deg[v] >= 3 and in_deg[v] == 0]
+    leaves_in = [v for v in nodes if out_deg[v] == 0]
+    if len(hubs_out) == 1 and len(leaves_in) >= n - 2:
+        return "FAN_OUT"
+
+    hubs_in = [v for v in nodes if in_deg[v] >= 3 and out_deg[v] == 0]
+    senders = [v for v in nodes if in_deg[v] == 0]
+    if len(hubs_in) == 1 and len(senders) >= n - 2:
+        return "FAN_IN"
+
+    origins = [v for v in nodes if in_deg[v] == 0]
+    dests = [v for v in nodes if out_deg[v] == 0]
+    middles = [v for v in nodes if in_deg[v] >= 1 and out_deg[v] >= 1]
+    if len(origins) == 1 and len(dests) == 1 and len(middles) >= 1:
+        return "SCATTER_GATHER"
+
+    hubs_gs = [v for v in nodes if in_deg[v] >= 2 and out_deg[v] >= 2]
+    if len(hubs_gs) == 1 and len(senders) >= 2 and len(dests) >= 2:
+        return "GATHER_SCATTER"
+
+    try:
+        if nx.is_bipartite(sub.to_undirected()):
+            return "BIPARTITE"
+    except Exception:
+        pass
+
+    if all(in_deg[v] <= 1 and out_deg[v] <= 1 for v in nodes):
+        return "STACK"
+
+    return "RANDOM"
+# The model's F1-max threshold is tuned for recall and flags far too many
+# transactions at a 0.1% base rate. For the dashboard we operate at a stricter,
+# high-precision point and cap the number of clusters shown.
+ALERT_THRESHOLD_FLOOR = 0.90
+MAX_ALERTS = 200
+
+
+def _severity(prob: float) -> str:
+    if prob >= 0.85:
+        return "critical"
+    if prob >= 0.6:
+        return "high"
+    if prob >= 0.4:
+        return "medium"
+    return "low"
+
+
+def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
+    """Returns (serialized_alerts, metrics). Raises if the model isn't trained."""
+    model, metrics = load_multignn()
+    if model is None:
+        raise RuntimeError(
+            "Multi-GNN model not found. Train it first: "
+            "python backend/multignn_model.py --epochs 8"
+        )
+    model_thr = float(metrics.get("threshold", 0.5)) if metrics else 0.5
+    threshold = max(model_thr, ALERT_THRESHOLD_FLOOR)
+
+    bundle = build_graph(max_rows=max_rows, return_df=True)
+    df = bundle["df"]
+    probs = score_transactions(model, bundle)
+    df = df.assign(_prob=probs)
+
+    flagged = df[df["_prob"] >= threshold]
+    logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
+                f"(threshold {threshold:.3f})")
+
+    # Cluster flagged transactions by connected accounts (account identity = bank:account)
+    G = _build_flagged_graph(flagged)
+
+    raw_alerts = []
+    for ci, comp in enumerate(nx.weakly_connected_components(G)):
+        if len(comp) < MIN_CLUSTER_NODES:
+            continue
+        raw = _component_to_alert(ci, comp, G, flagged)
+        if raw is not None:
+            raw_alerts.append(raw)
+
+    raw_alerts.sort(key=lambda a: a["confidence"], reverse=True)
+    raw_alerts = raw_alerts[:MAX_ALERTS]
+    serialized = serialize_alerts(raw_alerts)
+    logger.info(f"Multi-GNN produced {len(serialized)} alert clusters")
+    return serialized, (metrics or {})
+
+
+def _node_key(bank, acct) -> str:
+    return f"{bank}:{acct}"
+
+
+def _build_flagged_graph(flagged) -> nx.DiGraph:
+    G = nx.DiGraph()
+    for idx, row in flagged.iterrows():
+        s = _node_key(row["From Bank"], row["Account"])
+        t = _node_key(row["To Bank"], row["Account.1"])
+        G.add_edge(s, t, txIdx=int(idx), row=row, prob=float(row["_prob"]))
+    return G
+
+
+def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged) -> dict | None:
+    sub = G.subgraph(comp)
+    edge_data = list(sub.edges(data=True))
+    if not edge_data:
+        return None
+
+    probs   = [d["prob"] for _, _, d in edge_data]
+    amounts = [float(d["row"]["Amount Paid"]) for _, _, d in edge_data]
+    ts      = [d["row"]["Timestamp"] for _, _, d in edge_data]
+    cluster_prob = float(np.mean(probs))
+    max_prob     = float(np.max(probs))
+
+    # Per-account roles + volumes
+    sent  = defaultdict(float)
+    recv  = defaultdict(float)
+    txn   = defaultdict(int)
+    bank  = {}
+    label = {}
+    for u, v, d in edge_data:
+        row = d["row"]
+        sent[u] += float(row["Amount Paid"])
+        recv[v] += float(row["Amount Paid"])
+        txn[u]  += 1
+        txn[v]  += 1
+        bank.setdefault(u, str(row["From Bank"]))
+        bank.setdefault(v, str(row["To Bank"]))
+        label.setdefault(u, str(row["Account"]))
+        label.setdefault(v, str(row["Account.1"]))
+
+    nodes_list = []
+    for n in comp:
+        out_e = sub.out_degree(n)
+        in_e  = sub.in_degree(n)
+        role  = "source" if in_e == 0 else "destination" if out_e == 0 else "intermediary"
+        nodes_list.append({
+            "node_id": label.get(n, n),
+            "sev":     _severity(max_prob if role == "intermediary" else cluster_prob),
+            "role":    role,
+            "bank":    bank.get(n, "?"),
+            "vol":     sent[n] + recv[n],
+            "txn":     txn[n],
+        })
+
+    edges_list, transactions_list = [], []
+    for u, v, d in edge_data:
+        row = d["row"]
+        edges_list.append({
+            "txIdx":  d["txIdx"],
+            "source": label.get(u, u),
+            "target": label.get(v, v),
+            "amount_paid": float(row["Amount Paid"]),
+        })
+        transactions_list.append(row.to_dict())
+
+    span_h = 0.0
+    if len(ts) >= 2:
+        span_h = (max(ts) - min(ts)).total_seconds() / 3600.0
+
+    pattern = _classify_topology(sub)
+    pattern_desc = PATTERN_DESCRIPTIONS.get(pattern, "")
+
+    return {
+        "pattern_type": pattern,
+        "alert_id":     f"mgnn_{ci}",
+        "nodes_list":   nodes_list,
+        "edges_list":   edges_list,
+        "transactions_list": transactions_list,
+        "sub":          pattern_desc or "Multi-GNN detected laundering cluster",
+        "severity":     _severity(cluster_prob),
+        "confidence":   round(cluster_prob, 4),
+        "ml_score":     round(cluster_prob, 4),
+        "ml_score_rf":  None,
+        "ml_score_gnn": round(cluster_prob, 4),
+        "risk_flagged": True,
+        "time_span":    f"{span_h:.1f}h",
+        "hops":         len(edge_data),
+        "total_moved":  float(sum(amounts)),
+        "route_nodes":  [label.get(n, n) for n in comp],
+        "description":  (f"{pattern} — Multi-GNN flagged {len(edge_data)} transaction(s) "
+                         f"across {len(comp)} accounts "
+                         f"(mean prob {cluster_prob:.2f}, peak {max_prob:.2f})."),
+        "source":       "labelled",
+        "signals_triggered": ["Multi-GNN edge classification", f"Topology: {pattern}"],
+    }
