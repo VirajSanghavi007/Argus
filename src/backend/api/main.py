@@ -19,13 +19,13 @@ from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from whitelist import (
+from ..core.whitelist import (
     load_whitelist, save_whitelist, filter_alerts,
     add_to_whitelist, remove_from_whitelist,
     DEFAULT_WHITELIST,
 )
-from log_setup import setup_logging
-import db
+from ..utils.logging import setup_logging
+from .. import core
 
 # ── Structured Logging with Context (Issue #6) ─────────────────────────────
 logger = logging.getLogger("uvicorn.error")
@@ -214,13 +214,13 @@ def _run_pipeline():
     PIPELINE_START_TIME = time.time()
     try:
         if _load_cache():
-            DECISIONS = db.current_decisions()
+            DECISIONS = core.db.current_decisions()
             PIPELINE_READY.set()
             return
 
         rid = request_id.get()
         logger.info(f"[{rid}] No cache found — running Multi-GNN pipeline...")
-        from multignn_pipeline import run_multignn_pipeline
+        from ..pipeline.detection import run_multignn_pipeline
 
         try:
             serialized, ML_METRICS = run_multignn_pipeline(max_rows=MULTIGNN_MAX_ROWS)
@@ -249,8 +249,8 @@ def _run_pipeline():
         )
 
         # Persist alerts
-        db.replace_alerts(serialized, scan_id=str(int(time.time())))
-        DECISIONS = db.current_decisions()
+        core.db.replace_alerts(serialized, scan_id=str(int(time.time())))
+        DECISIONS = core.db.current_decisions()
 
         _check_drift([a["mlScore"] for a in serialized if a.get("mlScore") is not None])
         _save_cache()
@@ -269,7 +269,7 @@ def _run_pipeline():
 async def lifespan(app: FastAPI):
     """Startup and graceful shutdown logic."""
     _ensure_data_dir()
-    db.init_db()
+    core.db.init_db()
     log_paths = setup_logging(LOGS_DIR)
     logger.info(f"Error logs -> {log_paths['error_logs']}")
     logger.info(f"Training logs -> {log_paths['training_logs']}")
@@ -309,7 +309,7 @@ async def add_request_context(request: Request, call_next):
     return response
 
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = Path(__file__).parent.parent.parent / "src/frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
@@ -466,7 +466,7 @@ def post_decision(request: Request, alert_id: str, body: DecisionBody):
         if alert_id not in ALERTS:
             raise HTTPException(status_code=404, detail="Alert not found")
 
-    db.record_decision(alert_id, body.decision.value, body.reason, body.analyst)
+    core.db.record_decision(alert_id, body.decision.value, body.reason, body.analyst)
 
     with ALERTS_LOCK:
         DECISIONS[alert_id] = {
@@ -497,7 +497,7 @@ def get_decision_history(request: Request, alert_id: str):
 @limiter.limit("50/minute")
 def get_decisions(request: Request):
     """Current decision state (Issue #1)."""
-    return db.current_decisions()
+    return core.db.current_decisions()
 
 
 # ── Whitelist endpoints ─────────────────────────────────────────────────────

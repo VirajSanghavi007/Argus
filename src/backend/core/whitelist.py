@@ -9,7 +9,7 @@ Reads data/whitelist.json and provides helpers to:
 import json
 from pathlib import Path
 
-DATA_DIR       = Path(__file__).parent.parent / "data"
+DATA_DIR       = Path(__file__).parent.parent.parent.parent / "data"
 WHITELIST_PATH = DATA_DIR / "whitelist.json"
 
 DEFAULT_WHITELIST: dict = {

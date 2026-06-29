@@ -15,8 +15,8 @@ from collections import defaultdict
 import networkx as nx
 import numpy as np
 
-from multignn_model import build_graph, load_multignn, score_transactions
-from serializer import serialize_alerts
+from ..models.multignn import build_graph, load_multignn, score_transactions
+from ..core.serializer import serialize_alerts
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -147,7 +147,7 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
 
     # Compute edge importance explanations for flagged transactions (for interpretability).
     # This shows judges *why* transactions were flagged.
-    from multignn_model import explain_transactions
+    from ..models.multignn import explain_transactions
     flagged_indices = flagged.index.tolist()
     explanations = explain_transactions(model, bundle, flagged_indices)
     logger.info(f"Computed GNNExplainer importance for {len(explanations)} flagged edges")

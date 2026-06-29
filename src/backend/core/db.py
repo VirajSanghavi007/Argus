@@ -27,7 +27,7 @@ from pathlib import Path
 
 logger = logging.getLogger("uvicorn.error")
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "argus.db"
 
 # SQLite connections are not safe to share across threads by default. We guard a

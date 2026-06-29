@@ -58,7 +58,7 @@ def _progress_bar(current: int, total: int, prefix: str = "", suffix: str = "", 
         print()
 
 logger    = logging.getLogger("uvicorn.error")
-DATA_DIR  = Path(__file__).parent.parent / "data"
+DATA_DIR  = Path(__file__).parent.parent.parent.parent / "data"
 MODEL_PATH = DATA_DIR / "multignn_model.pt"
 META_PATH  = DATA_DIR / "multignn_meta.json"
 
