@@ -326,19 +326,6 @@ def get_frontend_dir():
         return FRONTEND_DIST
     return FRONTEND_PUBLIC
 
-@app.get("/")
-def serve_frontend():
-    frontend = get_frontend_dir()
-    return FileResponse(str(frontend / "index.html"))
-
-@app.get("/{path_name:path}")
-def serve_spa_fallback(path_name: str):
-    frontend = get_frontend_dir()
-    file_path = frontend / path_name
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(str(file_path))
-    return FileResponse(str(frontend / "index.html"))
-
 
 # ── Core endpoints ──────────────────────────────────────────────────────────
 
@@ -575,3 +562,19 @@ def get_drift(request: Request):
         return json.loads(DRIFT_LOG.read_text(encoding="utf-8"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── SPA fallback (must be last — catches all unmatched paths) ─────────────
+
+@app.get("/")
+def serve_frontend():
+    frontend = get_frontend_dir()
+    return FileResponse(str(frontend / "index.html"))
+
+@app.get("/{path_name:path}")
+def serve_spa_fallback(path_name: str):
+    frontend = get_frontend_dir()
+    file_path = frontend / path_name
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    return FileResponse(str(frontend / "index.html"))

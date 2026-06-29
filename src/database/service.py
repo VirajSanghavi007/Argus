@@ -19,7 +19,7 @@ import threading
 
 logger = logging.getLogger("uvicorn.error")
 
-from config import DATA_DIR, DB_PATH, SCHEMA_PATH
+import config
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
@@ -28,18 +28,18 @@ _lock = threading.Lock()
 def init_db() -> None:
     """Initialize database and schema. Idempotent."""
     global _conn
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=10)
     _conn.row_factory = sqlite3.Row
     with _lock:
         _conn.execute("PRAGMA journal_mode=WAL;")
         _conn.execute("PRAGMA busy_timeout=5000;")
-        if not SCHEMA_PATH.exists():
-            raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
-        schema = SCHEMA_PATH.read_text()
+        if not config.SCHEMA_PATH.exists():
+            raise FileNotFoundError(f"Schema file missing: {config.SCHEMA_PATH}")
+        schema = config.SCHEMA_PATH.read_text()
         _conn.executescript(schema)
         _conn.commit()
-    logger.info(f"SQLite ready -> {DB_PATH}")
+    logger.info(f"SQLite ready -> {config.DB_PATH}")
 
 
 def _require_conn() -> sqlite3.Connection:

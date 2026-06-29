@@ -15,7 +15,7 @@ a model-exists check, so it's exercised locally but never fails the CI build.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import networkx as nx
 import pytest
@@ -25,7 +25,7 @@ import pytest
 
 class TestTopologyClassifier:
     def _classify(self, edges):
-        from multignn_pipeline import _classify_topology
+        from backend.pipeline.detection import _classify_topology
         g = nx.DiGraph()
         g.add_edges_from(edges)
         return _classify_topology(g)
@@ -91,26 +91,26 @@ def _raw_alert(pattern="FAN_OUT", alert_id="mgnn_0"):
 
 class TestSerializer:
     def test_returns_list(self):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         out = serialize_alerts([_raw_alert()])
         assert isinstance(out, list)
         assert len(out) == 1
 
     def test_camel_case_shape(self):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         a = serialize_alerts([_raw_alert()])[0]
         for key in ("id", "name", "patternType", "severity", "confidence",
                     "mlScore", "totalMoved", "nodes", "edges", "transactions"):
             assert key in a, f"missing key: {key}"
 
     def test_pattern_name_and_type(self):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         a = serialize_alerts([_raw_alert("FAN_OUT")])[0]
         assert a["name"] == "Fan-Out"
         assert a["patternType"] == "fanOut"
 
     def test_amount_formatting(self):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         a = serialize_alerts([_raw_alert()])[0]
         assert a["totalMoved"] == "$400,000"
 
@@ -119,18 +119,19 @@ class TestSerializer:
 
 @pytest.fixture
 def temp_db(tmp_path, monkeypatch):
-    import db
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
-    monkeypatch.setattr(db, "_conn", None)
-    db.init_db()
-    yield db
-    if db._conn:
-        db._conn.close()
+    from database import service as db_svc
+    import config
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
+    monkeypatch.setattr(db_svc, "_conn", None)
+    db_svc.init_db()
+    yield db_svc
+    if db_svc._conn:
+        db_svc._conn.close()
 
 
 class TestPersistence:
     def test_alerts_round_trip(self, temp_db):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         serialized = serialize_alerts([_raw_alert(alert_id="mgnn_7")])
         temp_db.replace_alerts(serialized, scan_id="s1")
         loaded = temp_db.load_alerts()
@@ -138,7 +139,7 @@ class TestPersistence:
         assert loaded["mgnn_7"]["patternType"] == "fanOut"
 
     def test_replace_clears_old(self, temp_db):
-        from serializer import serialize_alerts
+        from backend.core.serializer import serialize_alerts
         temp_db.replace_alerts(serialize_alerts([_raw_alert(alert_id="old")]))
         temp_db.replace_alerts(serialize_alerts([_raw_alert(alert_id="new")]))
         loaded = temp_db.load_alerts()
@@ -166,15 +167,15 @@ class TestPersistence:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import db
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "api.db")
-    monkeypatch.setattr(db, "_conn", None)
-    db.init_db()
+    from database import service as db_svc
+    import config
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "api.db")
+    monkeypatch.setattr(db_svc, "_conn", None)
+    db_svc.init_db()
 
-    import main
+    from backend.api import main
     from fastapi.testclient import TestClient
-    # Inject one alert directly so we don't need the ML pipeline to produce data.
-    from serializer import serialize_alerts
+    from backend.core.serializer import serialize_alerts
     alert = serialize_alerts([_raw_alert(alert_id="mgnn_api")])[0]
     monkeypatch.setattr(main, "ALERTS", {"mgnn_api": alert})
     monkeypatch.setattr(main, "DECISIONS", {})
@@ -214,16 +215,14 @@ class TestApi:
 class TestFullPipeline:
     def test_pipeline_runs_if_model_present(self):
         pytest.importorskip("torch_geometric")
-        from multignn_model import MODEL_PATH, load_multignn
+        from config import MODEL_PATH
+        from backend.models.multignn import load_multignn
         if not MODEL_PATH.exists():
             pytest.skip("No trained model — run training first")
-        # The saved checkpoint must match the CURRENT model architecture. If it
-        # was trained with an older arch (e.g. GINEConv vs PNAConv), load_multignn
-        # returns None — skip rather than fail, but this is a signal to retrain.
         if load_multignn()[0] is None:
             pytest.skip("Trained model incompatible with current architecture — retrain")
 
-        from multignn_pipeline import run_multignn_pipeline
+        from backend.pipeline.detection import run_multignn_pipeline
         serialized, metrics = run_multignn_pipeline(max_rows=20_000)
         assert isinstance(serialized, list)
         assert isinstance(metrics, dict)

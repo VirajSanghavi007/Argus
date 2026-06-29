@@ -5,14 +5,14 @@ Runs on every push/PR to catch regressions before merging.
 import sys
 from pathlib import Path
 
-# Allow imports from backend/
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Allow imports from src/
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import networkx as nx
 import numpy as np
 import pytest
 
-from whitelist import is_exempt, filter_alerts, DEFAULT_WHITELIST
+from backend.core.whitelist import is_exempt, filter_alerts, DEFAULT_WHITELIST
 
 
 # ── Whitelist tests ───────────────────────────────────────────────────────────

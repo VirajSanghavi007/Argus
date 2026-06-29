@@ -788,7 +788,7 @@ def explain_transactions(model, bundle: dict, edge_indices: list[int]) -> dict:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main():
     if not HAS_TORCH:
         print("PyTorch not installed. Run: pip install torch torch_geometric", file=sys.stderr)
         sys.exit(1)
@@ -819,3 +819,7 @@ if __name__ == "__main__":
 
     print(f"\nMulti-GNN done — Test F1={m['f1']} AUC={m['auc']} AP={m['ap']} "
           f"P={m['precision']} R={m['recall']} @thr={m['threshold']}")
+
+
+if __name__ == "__main__":
+    main()
