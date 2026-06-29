@@ -273,9 +273,9 @@ function stopLoadingAnimation() {
 /* ════════════════════════════════════════════
    CONFIG
 ════════════════════════════════════════════ */
-const API_BASE = (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '')
+const API_BASE = (window.location.protocol === 'file:')
   ? 'http://localhost:8000'
-  : 'https://ideahackathon-1.onrender.com';
+  : '';
 
 /* ── Pattern formatting ── */
 function formatPatternName(pt) {

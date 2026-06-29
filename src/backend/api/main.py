@@ -566,6 +566,18 @@ def get_drift(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/validation")
+@limiter.limit("50/minute")
+def get_validation(request: Request):
+    validation_path = DATA_DIR / "validation_results.json"
+    if not validation_path.exists():
+        raise HTTPException(status_code=404, detail="Run validator.py first to generate validation data.")
+    try:
+        return json.loads(validation_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── SPA fallback (must be last — catches all unmatched paths) ─────────────
 
 @app.get("/")
