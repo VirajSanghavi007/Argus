@@ -11,9 +11,7 @@ from pathlib import Path
 
 logger = logging.getLogger("uvicorn.error")
 
-DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
-DB_PATH = DATA_DIR / "argus.db"
-SCHEMA_PATH = Path(__file__).parent / "schemas" / "schema.sql"
+from config import DATA_DIR, DB_PATH, SCHEMA_PATH
 
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()

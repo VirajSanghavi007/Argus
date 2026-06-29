@@ -57,10 +57,9 @@ def _progress_bar(current: int, total: int, prefix: str = "", suffix: str = "", 
     if current >= total:
         print()
 
-logger    = logging.getLogger("uvicorn.error")
-DATA_DIR  = Path(__file__).parent.parent.parent.parent / "data"
-MODEL_PATH = DATA_DIR / "multignn_model.pt"
-META_PATH  = DATA_DIR / "multignn_meta.json"
+logger = logging.getLogger("uvicorn.error")
+
+from config import DATA_DIR, MODEL_PATH, META_PATH
 
 try:
     import torch
@@ -102,7 +101,10 @@ def build_graph(csv_path: Path | None = None, max_rows: int | None = None,
 
     csv_path = csv_path or _resolve_csv()
     if not csv_path.exists():
-        raise FileNotFoundError(f"Dataset not found: {csv_path}")
+        raise FileNotFoundError(
+            f"Dataset not found. Checked: data/active/, data/IBM/, data/. "
+            f"Upload HI-Small_Trans.csv to one of these directories."
+        )
 
     logger.info(f"Multi-GNN: reading {csv_path.name} (max_rows={max_rows})...")
     df = pd.read_csv(csv_path, nrows=max_rows)

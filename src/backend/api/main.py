@@ -26,18 +26,13 @@ from ..core.whitelist import (
 )
 from ..utils.logging import setup_logging
 from .. import core
+from config import (
+    DATA_DIR, LOGS_DIR, CACHE_PATH, DRIFT_LOG, MODEL_PATH, MULTIGNN_MAX_ROWS,
+)
 
 # ── Structured Logging with Context (Issue #6) ─────────────────────────────
 logger = logging.getLogger("uvicorn.error")
 request_id: ContextVar[str] = ContextVar("request_id", default="")
-
-DATA_DIR = Path(__file__).parent.parent / "data"
-LOGS_DIR = Path(__file__).parent.parent / "logs"
-CACHE_PATH = DATA_DIR / "pipeline_cache.json"
-DRIFT_LOG = DATA_DIR / "drift_log.json"
-MODEL_PATH = DATA_DIR / "multignn_model.pt"
-
-MULTIGNN_MAX_ROWS = 600_000
 
 # ── Concurrency Safety (Issue #10) ──────────────────────────────────────────
 ALERTS: dict = {}
@@ -309,15 +304,23 @@ async def add_request_context(request: Request, call_next):
     return response
 
 
-FRONTEND_DIR = Path(__file__).parent.parent.parent / "src/frontend"
+FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 FRONTEND_DIST = FRONTEND_DIR / "dist"
 FRONTEND_PUBLIC = FRONTEND_DIR / "public"
 
-# Serve static assets (CSS, vendor libs, etc)
+# Serve static assets: CSS, JS, and vendor libraries
+_css_dir = FRONTEND_DIR / "css"
+_js_dir = FRONTEND_DIR / "js"
+_lib_dir = FRONTEND_DIR / "lib"
+if _css_dir.exists():
+    app.mount("/static/css", StaticFiles(directory=str(_css_dir)), name="static-css")
+if _js_dir.exists():
+    app.mount("/static/js", StaticFiles(directory=str(_js_dir)), name="static-js")
+if _lib_dir.exists():
+    app.mount("/static/lib", StaticFiles(directory=str(_lib_dir)), name="static-lib")
 if FRONTEND_PUBLIC.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_PUBLIC)), name="static")
+    app.mount("/static/public", StaticFiles(directory=str(FRONTEND_PUBLIC)), name="static-public")
 
-# Serve built React app if available, otherwise use public/index.html
 def get_frontend_dir():
     if FRONTEND_DIST.exists():
         return FRONTEND_DIST
@@ -509,7 +512,7 @@ def get_decision_history(request: Request, alert_id: str):
         if alert_id not in ALERTS:
             raise HTTPException(status_code=404, detail="Alert not found")
 
-    return {"alert_id": alert_id, "history": db.decision_history(alert_id)}
+    return {"alert_id": alert_id, "history": core.db.decision_history(alert_id)}
 
 
 @app.get("/decisions")
