@@ -1,3 +1,4 @@
+# UNAUTHENTICATED — do not expose publicly without adding auth
 import asyncio
 import json
 import threading
@@ -563,7 +564,8 @@ def get_drift(request: Request):
     try:
         return json.loads(DRIFT_LOG.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to read drift log: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read drift data")
 
 
 @app.get("/validation")
@@ -575,7 +577,8 @@ def get_validation(request: Request):
     try:
         return json.loads(validation_path.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to read validation data: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read validation data")
 
 
 # ── SPA fallback (must be last — catches all unmatched paths) ─────────────
@@ -588,7 +591,7 @@ def serve_frontend():
 @app.get("/{path_name:path}")
 def serve_spa_fallback(path_name: str):
     frontend = get_frontend_dir()
-    file_path = frontend / path_name
-    if file_path.exists() and file_path.is_file():
+    file_path = (frontend / path_name).resolve()
+    if file_path.is_relative_to(frontend.resolve()) and file_path.is_file():
         return FileResponse(str(file_path))
     return FileResponse(str(frontend / "index.html"))
