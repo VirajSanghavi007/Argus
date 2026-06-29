@@ -646,6 +646,32 @@ const SEV_NODE = {
 };
 const FMT_EDGE = { RTGS:'#00579C', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
 
+function getImportanceColor(importance) {
+  // Map GNNExplainer importance (0-1) to color: light gray → orange → red
+  // Low (0.0): #E5E7EB, Medium (0.5): #F97316, High (1.0): #DC2626
+  const imp = Math.max(0, Math.min(1, importance || 0.5));
+  if (imp < 0.5) {
+    // Interpolate from gray to orange
+    const t = imp * 2; // 0 to 1
+    return interpolateHex('#E5E7EB', '#F97316', t);
+  } else {
+    // Interpolate from orange to red
+    const t = (imp - 0.5) * 2; // 0 to 1
+    return interpolateHex('#F97316', '#DC2626', t);
+  }
+}
+
+function interpolateHex(hex1, hex2, t) {
+  const c1 = parseInt(hex1.slice(1), 16);
+  const c2 = parseInt(hex2.slice(1), 16);
+  const r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
+  const r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 const BANK_NAMES = [
   'Apex National Bank','Meridian Trust Co.','Pinnacle Savings Bank',
   'Harbor Commercial Bank','Summit Finance Corp','Central Mutual Bank',
@@ -722,8 +748,9 @@ function renderGraph() {
   });
   currentAlert.edges.forEach(e => {
     const fmt = (currentAlert.transactions[e.txIdx]||{}).fmt||'';
+    const importance = e.importance || 0.5;
     elements.push({ data:{ id:e.id, source:e.source, target:e.target,
-      label:e.label, txIdx:e.txIdx, fmt } });
+      label:e.label, txIdx:e.txIdx, fmt, importance } });
   });
 
   cy = cytoscape({
@@ -738,10 +765,11 @@ function renderGraph() {
         'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
       }},
       { selector:'edge', style:{
-        'line-color': e => FMT_EDGE[e.data('fmt')]||'#94A3B8',
-        'target-arrow-color': e => FMT_EDGE[e.data('fmt')]||'#94A3B8',
+        'line-color': e => getImportanceColor(e.data('importance')),
+        'target-arrow-color': e => getImportanceColor(e.data('importance')),
         'target-arrow-shape':'triangle', 'curve-style':'bezier',
-        'width':1.5, 'font-size':8, 'color':'#475569',
+        'width': e => 1.5 + (e.data('importance')||0.5) * 2,
+        'font-size':8, 'color':'#475569',
         'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
         'text-background-opacity':.9,
         'text-background-padding':2,
@@ -772,6 +800,21 @@ function renderGraph() {
     document.getElementById('tt-txn').textContent  = n.txn||'—';
   });
   cy.on('mouseout','node', () => document.getElementById('tooltip').style.display='none');
+  cy.on('mouseover','edge', e => {
+    const edgeData = e.target.data();
+    const pos = e.renderedPosition;
+    const box = document.getElementById('cy').getBoundingClientRect();
+    const tt  = document.getElementById('tooltip');
+    tt.style.left = (box.left+pos.x+16)+'px';
+    tt.style.top  = (box.top+pos.y-20)+'px';
+    tt.style.display='block';
+    document.getElementById('tt-id').textContent   = `${edgeData.source} → ${edgeData.target}`;
+    document.getElementById('tt-bank').textContent = edgeData.label||'—';
+    document.getElementById('tt-role').textContent = `Importance: ${Math.round(edgeData.importance * 100)}%`;
+    document.getElementById('tt-vol').textContent  = '—';
+    document.getElementById('tt-txn').textContent  = '—';
+  });
+  cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
   cy.on('tap','node', e => highlightNode(e.target.id()));
 }
 
@@ -808,6 +851,9 @@ function applyStep(idx) {
   if (idx<0||idx>=txns.length) return;
   currentStep = idx;
   const tx = txns[idx];
+  const edge = currentAlert.edges[idx];
+  const imp = edge?.importance || 0.5;
+  const impColor = getImportanceColor(imp);
   document.getElementById('tl-card').innerHTML = `
     <div class="tl-route">
       <span style="color:var(--blue)">${tx.from}</span>
@@ -820,6 +866,7 @@ function applyStep(idx) {
       <span>Recv: <strong>${tx.recv}</strong></span>
       <span>${tx.fromBank} → ${tx.toBank}</span>
       <span>${tx.ts||'—'}</span>
+      <span style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:${impColor};font-weight:500">🔍 ML Importance: ${Math.round(imp*100)}%</span>
     </div>`;
   if (cy) {
     cy.edges().removeClass('hl-edge');
@@ -852,11 +899,14 @@ function updateCounter() {
 }
 function renderDots() {
   const t = currentAlert ? currentAlert.transactions.length : 0;
-  document.getElementById('tl-dots').innerHTML = Array.from({length:t},(_,i)=>
-    `<div class="tl-dot ${i<currentStep?'visited':''} ${i===currentStep?'current':''}"
+  document.getElementById('tl-dots').innerHTML = Array.from({length:t},(_,i)=>{
+    const edge = currentAlert?.edges[i];
+    const imp = edge?.importance || 0.5;
+    const isImportant = imp >= 0.7;
+    return `<div class="tl-dot ${i<currentStep?'visited':''} ${i===currentStep?'current':''} ${isImportant?'important':''}"
           onclick="applyStep(${i})" role="button" tabindex="0" aria-label="Transaction ${i+1}"
-          onkeydown="if(event.key==='Enter')applyStep(${i})"></div>`
-  ).join('');
+          onkeydown="if(event.key==='Enter')applyStep(${i})" style="box-shadow:${isImportant?`0 0 8px ${getImportanceColor(imp)}`:'none'}"></div>`
+  }).join('');
 }
 
 /* ════════════════════════════════════════════
