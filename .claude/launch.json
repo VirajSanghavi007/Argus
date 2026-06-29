@@ -4,14 +4,19 @@
     {
       "name": "backend",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "backend"],
-      "port": 8000
+      "runtimeArgs": ["-m", "uvicorn", "src.backend.api.main:app", "--reload", "--port", "8000"],
+      "port": 8000,
+      "autoPort": false,
+      "env": {
+        "PYTHONPATH": "."
+      }
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "frontend"],
-      "port": 5500
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite"],
+      "port": 5173,
+      "cwd": "src/frontend"
     }
   ]
 }

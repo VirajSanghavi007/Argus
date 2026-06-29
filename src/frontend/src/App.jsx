@@ -58,7 +58,40 @@ export default function App() {
   };
 
   if (loading) {
-    return <div className="load-overlay">Loading...</div>;
+    return (
+      <div id="loading-overlay">
+        <div className="load-inner">
+          <svg className="load-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <div className="load-title">AML Intelligence Platform</div>
+          <div className="load-sub">Initializing detection engine...</div>
+          <div className="load-bar-wrap" style={{width: '100%', marginTop: '16px'}}>
+            <div className="load-bar" style={{width: '75%'}}></div>
+          </div>
+          <div className="load-stages" style={{marginTop: '16px', width: '100%'}}>
+            <div className="load-stage done">
+              <div className="load-stage-dot done"></div>
+              <span className="load-stage-label">Establishing secure connection...</span>
+            </div>
+            <div className="load-stage done">
+              <div className="load-stage-dot done"></div>
+              <span className="load-stage-label">Loading transaction graph...</span>
+            </div>
+            <div className="load-stage done">
+              <div className="load-stage-dot done"></div>
+              <span className="load-stage-label">Running pattern detection engine...</span>
+            </div>
+            <div className="load-stage active">
+              <div className="load-stage-dot active"></div>
+              <span className="load-stage-label">Building alert index...</span>
+            </div>
+          </div>
+          <div className="load-session-info">SESSION ubu · UBI · {new Date().toISOString().replace('T', ' ').slice(0, -5)} UTC</div>
+        </div>
+      </div>
+    );
   }
 
   const viewProps = {
