@@ -310,12 +310,31 @@ async def add_request_context(request: Request, call_next):
 
 
 FRONTEND_DIR = Path(__file__).parent.parent.parent / "src/frontend"
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+FRONTEND_DIST = FRONTEND_DIR / "dist"
+FRONTEND_PUBLIC = FRONTEND_DIR / "public"
 
+# Serve static assets (CSS, vendor libs, etc)
+if FRONTEND_PUBLIC.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_PUBLIC)), name="static")
+
+# Serve built React app if available, otherwise use public/index.html
+def get_frontend_dir():
+    if FRONTEND_DIST.exists():
+        return FRONTEND_DIST
+    return FRONTEND_PUBLIC
 
 @app.get("/")
 def serve_frontend():
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+    frontend = get_frontend_dir()
+    return FileResponse(str(frontend / "index.html"))
+
+@app.get("/{path_name:path}")
+def serve_spa_fallback(path_name: str):
+    frontend = get_frontend_dir()
+    file_path = frontend / path_name
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    return FileResponse(str(frontend / "index.html"))
 
 
 # ── Core endpoints ──────────────────────────────────────────────────────────

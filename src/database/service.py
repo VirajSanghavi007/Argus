@@ -1,0 +1,154 @@
+"""
+Database service — SQLite persistence for alerts and decisions.
+Separate from backend: owns schema, exposes operations.
+"""
+
+import json
+import logging
+import sqlite3
+import threading
+from pathlib import Path
+
+logger = logging.getLogger("uvicorn.error")
+
+DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
+DB_PATH = DATA_DIR / "argus.db"
+SCHEMA_PATH = Path(__file__).parent / "schemas" / "schema.sql"
+
+_conn: sqlite3.Connection | None = None
+_lock = threading.Lock()
+
+
+def init_db() -> None:
+    """Initialize database and schema. Idempotent."""
+    global _conn
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    _conn.row_factory = sqlite3.Row
+    with _lock:
+        _conn.execute("PRAGMA journal_mode=WAL;")
+        schema = SCHEMA_PATH.read_text()
+        _conn.executescript(schema)
+        _conn.commit()
+    logger.info(f"SQLite ready -> {DB_PATH}")
+
+
+def _require_conn() -> sqlite3.Connection:
+    if _conn is None:
+        init_db()
+    assert _conn is not None
+    return _conn
+
+
+# ── Alerts ──────────────────────────────────────────────────────────────────
+
+def replace_alerts(alerts: list[dict], scan_id: str = "") -> int:
+    """Replace alerts table with current scan output."""
+    conn = _require_conn()
+    with _lock:
+        conn.execute("DELETE FROM alerts;")
+        for a in alerts:
+            conn.execute(
+                """INSERT OR REPLACE INTO alerts
+                   (id, pattern_type, severity, confidence, ml_score, total_moved,
+                    node_count, txn_count, source, payload, scan_id)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    a["id"],
+                    a.get("patternType"),
+                    a.get("severity"),
+                    a.get("confidence"),
+                    a.get("mlScore"),
+                    a.get("totalMoved"),
+                    len(a.get("nodes", [])),
+                    len(a.get("transactions", [])),
+                    a.get("source", "labelled"),
+                    json.dumps(a),
+                    scan_id,
+                ),
+            )
+        conn.commit()
+    logger.info(f"Persisted {len(alerts)} alerts (scan_id={scan_id or 'n/a'})")
+    return len(alerts)
+
+
+def load_alerts() -> dict:
+    """Return {alert_id: full_alert_dict}."""
+    conn = _require_conn()
+    with _lock:
+        rows = conn.execute("SELECT payload FROM alerts").fetchall()
+    out: dict = {}
+    for r in rows:
+        a = json.loads(r["payload"])
+        out[a["id"]] = a
+    return out
+
+
+def has_alerts() -> bool:
+    conn = _require_conn()
+    with _lock:
+        return conn.execute("SELECT 1 FROM alerts LIMIT 1").fetchone() is not None
+
+
+# ── Decisions (append-only audit log) ───────────────────────────────────────
+
+def record_decision(alert_id: str, decision: str, reason: str = "", analyst: str = "") -> None:
+    """Append decision to audit log."""
+    conn = _require_conn()
+    with _lock:
+        conn.execute(
+            "INSERT INTO decisions (alert_id, decision, reason, analyst) VALUES (?,?,?,?)",
+            (alert_id, decision, reason, analyst),
+        )
+        conn.commit()
+
+
+def current_decisions() -> dict:
+    """Latest decision per alert from append-only log."""
+    conn = _require_conn()
+    with _lock:
+        rows = conn.execute(
+            """SELECT d.alert_id, d.decision, d.reason, d.analyst, d.created_at
+               FROM decisions d
+               JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
+                 ON d.alert_id = m.alert_id AND d.seq = m.mx"""
+        ).fetchall()
+    return {
+        r["alert_id"]: {
+            "decision": r["decision"],
+            "reason": r["reason"],
+            "analyst": r["analyst"],
+            "created_at": r["created_at"],
+        }
+        for r in rows
+    }
+
+
+def decision_history(alert_id: str) -> list[dict]:
+    """Chronological audit trail for one alert."""
+    conn = _require_conn()
+    with _lock:
+        rows = conn.execute(
+            """SELECT decision, reason, analyst, created_at
+               FROM decisions WHERE alert_id = ? ORDER BY seq ASC""",
+            (alert_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def decision_counts() -> dict:
+    """Current decision aggregate."""
+    conn = _require_conn()
+    with _lock:
+        rows = conn.execute(
+            """SELECT d.decision, COUNT(*) as cnt
+               FROM decisions d
+               JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
+                 ON d.alert_id = m.alert_id AND d.seq = m.mx
+               GROUP BY d.decision"""
+        ).fetchall()
+    counts = {"confirm": 0, "review": 0, "dismiss": 0}
+    for r in rows:
+        if r["decision"] in counts:
+            counts[r["decision"]] = r["cnt"]
+    return counts
