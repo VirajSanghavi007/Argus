@@ -1,13 +1,21 @@
 """
 Database service — SQLite persistence for alerts and decisions.
 Separate from backend: owns schema, exposes operations.
+
+TODO: PostgreSQL migration for production
+  1. Replace sqlite3 with asyncpg or psycopg[binary]
+  2. Use Render managed PostgreSQL (free tier available)
+  3. Replace DB_PATH with DATABASE_URL env var (Render sets this automatically)
+  4. Replace PRAGMA WAL with PostgreSQL connection pool (asyncpg.create_pool)
+  5. Replace threading.Lock with connection pool concurrency
+  6. Update schema.sql: INTEGER PRIMARY KEY AUTOINCREMENT → SERIAL PRIMARY KEY,
+     DATETIME DEFAULT CURRENT_TIMESTAMP → TIMESTAMPTZ DEFAULT NOW()
 """
 
 import json
 import logging
 import sqlite3
 import threading
-from pathlib import Path
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -21,10 +29,13 @@ def init_db() -> None:
     """Initialize database and schema. Idempotent."""
     global _conn
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    _conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
     _conn.row_factory = sqlite3.Row
     with _lock:
         _conn.execute("PRAGMA journal_mode=WAL;")
+        _conn.execute("PRAGMA busy_timeout=5000;")
+        if not SCHEMA_PATH.exists():
+            raise FileNotFoundError(f"Schema file missing: {SCHEMA_PATH}")
         schema = SCHEMA_PATH.read_text()
         _conn.executescript(schema)
         _conn.commit()

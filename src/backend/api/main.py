@@ -25,7 +25,7 @@ from ..core.whitelist import (
     DEFAULT_WHITELIST,
 )
 from ..utils.logging import setup_logging
-from .. import core
+from database import service as db
 from config import (
     DATA_DIR, LOGS_DIR, CACHE_PATH, DRIFT_LOG, MODEL_PATH, MULTIGNN_MAX_ROWS,
 )
@@ -209,7 +209,7 @@ def _run_pipeline():
     PIPELINE_START_TIME = time.time()
     try:
         if _load_cache():
-            DECISIONS = core.db.current_decisions()
+            DECISIONS = db.current_decisions()
             PIPELINE_READY.set()
             return
 
@@ -244,8 +244,8 @@ def _run_pipeline():
         )
 
         # Persist alerts
-        core.db.replace_alerts(serialized, scan_id=str(int(time.time())))
-        DECISIONS = core.db.current_decisions()
+        db.replace_alerts(serialized, scan_id=str(int(time.time())))
+        DECISIONS = db.current_decisions()
 
         _check_drift([a["mlScore"] for a in serialized if a.get("mlScore") is not None])
         _save_cache()
@@ -264,7 +264,7 @@ def _run_pipeline():
 async def lifespan(app: FastAPI):
     """Startup and graceful shutdown logic."""
     _ensure_data_dir()
-    core.db.init_db()
+    db.init_db()
     log_paths = setup_logging(LOGS_DIR)
     logger.info(f"Error logs -> {log_paths['error_logs']}")
     logger.info(f"Training logs -> {log_paths['training_logs']}")
@@ -488,7 +488,7 @@ def post_decision(request: Request, alert_id: str, body: DecisionBody):
         if alert_id not in ALERTS:
             raise HTTPException(status_code=404, detail="Alert not found")
 
-    core.db.record_decision(alert_id, body.decision.value, body.reason, body.analyst)
+    db.record_decision(alert_id, body.decision.value, body.reason, body.analyst)
 
     with ALERTS_LOCK:
         DECISIONS[alert_id] = {
@@ -512,14 +512,14 @@ def get_decision_history(request: Request, alert_id: str):
         if alert_id not in ALERTS:
             raise HTTPException(status_code=404, detail="Alert not found")
 
-    return {"alert_id": alert_id, "history": core.db.decision_history(alert_id)}
+    return {"alert_id": alert_id, "history": db.decision_history(alert_id)}
 
 
 @app.get("/decisions")
 @limiter.limit("50/minute")
 def get_decisions(request: Request):
     """Current decision state (Issue #1)."""
-    return core.db.current_decisions()
+    return db.current_decisions()
 
 
 # ── Whitelist endpoints ─────────────────────────────────────────────────────

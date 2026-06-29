@@ -123,8 +123,8 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
         bundle = build_graph(max_rows=max_rows, return_df=True)
     except FileNotFoundError as e:
         raise RuntimeError(
-            f"Transaction data not found: {e}. Ensure HI-Small_Trans.csv exists in data/ directory. "
-            "Check data ingestion pipeline."
+            f"Transaction dataset not found. Expected at data/active/HI-Small_Trans.csv or data/IBM/HI-Small_Trans.csv. "
+            "Upload the dataset to the server or use Git LFS."
         )
     except Exception as e:
         raise RuntimeError(

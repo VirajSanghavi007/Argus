@@ -347,6 +347,9 @@ async function init() {
   await sleep(minWait(4)); setStage(4);
   await sleep(400);
   stopLoadingAnimation();
+  // Reveal nav/main hidden by inline style to prevent dashboard flash
+  const hideStyle = document.querySelector('style');
+  if (hideStyle && hideStyle.textContent.includes('display: none !important')) hideStyle.remove();
   const ov = document.getElementById('loading-overlay');
   ov.style.transition = 'opacity .6s ease';
   ov.style.opacity = '0';
