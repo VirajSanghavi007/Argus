@@ -269,6 +269,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"Error logs -> {log_paths['error_logs']}")
     logger.info(f"Training logs -> {log_paths['training_logs']}")
 
+    if not MODEL_PATH.exists():
+        logger.warning(f"Model file not found at {MODEL_PATH} — app will run in degraded mode (no ML inference)")
+    else:
+        logger.info(f"Model file found at {MODEL_PATH}")
+
     # Start pipeline as non-daemon thread for graceful shutdown (Issue #7)
     pipeline_thread = threading.Thread(target=_run_pipeline, daemon=False)
     pipeline_thread.start()
