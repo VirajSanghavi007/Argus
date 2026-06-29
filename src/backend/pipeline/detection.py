@@ -86,7 +86,7 @@ def _classify_topology(sub: nx.DiGraph) -> str:
 # The model's F1-max threshold is tuned for recall and flags far too many
 # transactions at a 0.1% base rate. For the dashboard we operate at a stricter,
 # high-precision point and cap the number of clusters shown.
-ALERT_THRESHOLD_FLOOR = 0.90
+ALERT_THRESHOLD_FLOOR = 0.10
 MAX_ALERTS = 200
 
 

@@ -73,7 +73,7 @@ if %COUNT% geq 120 (
 
 timeout /t 1 /nobreak >nul
 
-powershell -NoProfile -Command "try{Invoke-WebRequest http://localhost:8000/health -UseBasicParsing -TimeoutSec 2;exit 0}catch{exit 1}" >nul 2>&1
+powershell -NoProfile -Command "try{Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing -TimeoutSec 2;exit 0}catch{exit 1}" >nul 2>&1
 if %errorlevel%==0 goto :ready
 
 set /a COUNT=%COUNT%+1

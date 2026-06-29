@@ -15,6 +15,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -405,17 +406,7 @@ def list_alerts(
     severity: SeverityLevel | None = Query(default=None),
     source: AlertSource | None = Query(default=None),
 ):
-    """List alerts with ETag caching (Issues #1, #2, #5)."""
-    global ALERTS_ETAG
-
-    # Check ETag cache
-    current_etag = _compute_alerts_etag()
-    ALERTS_ETAG = current_etag
-
-    if_none_match = request.headers.get("If-None-Match")
-    if if_none_match == current_etag:
-        return JSONResponse(status_code=304)  # Not Modified
-
+    """List alerts (Issues #1, #2, #5)."""
     results = []
     with ALERTS_LOCK:
         for a in ALERTS.values():
@@ -440,10 +431,7 @@ def list_alerts(
                 "source": a.get("source", "labelled"),
             })
 
-    response = JSONResponse(content=results)
-    response.headers["ETag"] = current_etag
-    response.headers["Cache-Control"] = "public, max-age=60"
-    return response
+    return JSONResponse(content=results, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/alerts/suppressed")

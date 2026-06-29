@@ -440,13 +440,18 @@ function showView(name) {
    DASHBOARD
 ════════════════════════════════════════════ */
 function renderDashboard() {
-  if (!allAlerts.length) return;
-
   document.getElementById('st-total').textContent = allAlerts.length;
   const total = allAlerts.reduce((s,a) => s + parseMoney(a.totalMoved), 0);
   document.getElementById('st-money').textContent = fmtMoney(total);
   document.getElementById('st-high').textContent  = allAlerts.filter(a=>a.severity==='HIGH').length;
   document.getElementById('st-dec').textContent   = Object.keys(decisions).length;
+
+  if (!allAlerts.length) {
+    document.getElementById('db-recent').innerHTML =
+      '<div style="text-align:center;color:var(--muted);padding:var(--sp-4);font-family:var(--sans)">' +
+      'No alerts detected. Model may need retraining or threshold adjustment.</div>';
+    return;
+  }
 
   // Pattern donut
   const ptMap = {};
