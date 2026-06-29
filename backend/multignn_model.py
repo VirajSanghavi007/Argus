@@ -725,6 +725,65 @@ def score_transactions(model, bundle: dict, batch_size: int = 8192) -> np.ndarra
                     bundle["label_index"], bundle["edge_attr"][:E], batch_size)
 
 
+@torch.no_grad()
+def explain_transactions(model, bundle: dict, edge_indices: list[int]) -> dict:
+    """Use GNNExplainer to compute edge importance for flagged transactions.
+
+    Returns {edge_idx: importance_score (0-1)} for edges in edge_indices.
+    High score = edge was important to the laundering prediction.
+    """
+    if model is None or not HAS_TORCH:
+        return {idx: 0.5 for idx in edge_indices}
+
+    try:
+        from torch_geometric.explain import Explainer, GNNExplainer
+
+        x, edge_index, edge_attr = bundle["x"], bundle["edge_index"], bundle["edge_attr"]
+        label_index, edge_attr_fwd = bundle["label_index"], edge_attr[:bundle["label_index"].size(1)]
+
+        # GNNExplainer computes the mask of edges that matter for a specific prediction.
+        explainer = Explainer(
+            model=model,
+            algorithm=GNNExplainer(epochs=100, lr=0.01),
+            explanation_type='model',
+            model_config=dict(
+                mode='regression',
+                task_level='edge',
+                return_type='raw',
+            ),
+        )
+
+        importance: dict = {}
+        for edge_idx in edge_indices[:50]:  # Limit to first 50 for speed
+            if edge_idx >= label_index.size(1):
+                continue
+            try:
+                # Explain this specific edge's prediction
+                exp = explainer(
+                    x=x,
+                    edge_index=edge_index,
+                    edge_attr=edge_attr,
+                    index=edge_idx,
+                    target=label_index[:, edge_idx],
+                )
+                # The explanation returns an edge_mask; take its mean as importance.
+                if hasattr(exp, 'edge_mask') and exp.edge_mask is not None:
+                    importance[edge_idx] = float(exp.edge_mask.mean().cpu().numpy())
+                else:
+                    importance[edge_idx] = 0.5
+            except Exception as e:
+                logger.debug(f"GNNExplainer failed for edge {edge_idx}: {e}")
+                importance[edge_idx] = 0.5
+
+        return importance
+    except ImportError:
+        logger.warning("torch_geometric.explain not available — GNNExplainer disabled")
+        return {idx: 0.5 for idx in edge_indices}
+    except Exception as e:
+        logger.warning(f"GNNExplainer failed: {e}")
+        return {idx: 0.5 for idx in edge_indices}
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -61,6 +61,7 @@ def serialize_alerts(alert_dicts: list[dict]) -> list[dict]:
                 "target": e["target"],
                 "label":  _fmt_amount(e["amount_paid"]),
                 "txIdx":  e["txIdx"],
+                "importance": e.get("importance", 0.5),  # GNNExplainer score (0-1)
             })
 
         transactions = []

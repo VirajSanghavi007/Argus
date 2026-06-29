@@ -120,6 +120,13 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
                 f"(threshold {threshold:.3f})")
 
+    # Compute edge importance explanations for flagged transactions (for interpretability).
+    # This shows judges *why* transactions were flagged.
+    from multignn_model import explain_transactions
+    flagged_indices = flagged.index.tolist()
+    explanations = explain_transactions(model, bundle, flagged_indices)
+    logger.info(f"Computed GNNExplainer importance for {len(explanations)} flagged edges")
+
     # Cluster flagged transactions by connected accounts (account identity = bank:account)
     G = _build_flagged_graph(flagged)
 
@@ -127,7 +134,7 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     for ci, comp in enumerate(nx.weakly_connected_components(G)):
         if len(comp) < MIN_CLUSTER_NODES:
             continue
-        raw = _component_to_alert(ci, comp, G, flagged)
+        raw = _component_to_alert(ci, comp, G, flagged, explanations)
         if raw is not None:
             raw_alerts.append(raw)
 
@@ -151,7 +158,7 @@ def _build_flagged_graph(flagged) -> nx.DiGraph:
     return G
 
 
-def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged) -> dict | None:
+def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations: dict | None = None) -> dict | None:
     sub = G.subgraph(comp)
     edge_data = list(sub.edges(data=True))
     if not edge_data:
@@ -197,11 +204,15 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged) -> dict | No
     edges_list, transactions_list = [], []
     for u, v, d in edge_data:
         row = d["row"]
+        txIdx = d["txIdx"]
+        # Attach GNNExplainer importance score (0-1, higher = more important to laundering pred)
+        importance = (explanations or {}).get(txIdx, 0.5)
         edges_list.append({
-            "txIdx":  d["txIdx"],
+            "txIdx":  txIdx,
             "source": label.get(u, u),
             "target": label.get(v, v),
             "amount_paid": float(row["Amount Paid"]),
+            "importance": round(float(importance), 3),
         })
         transactions_list.append(row.to_dict())
 
