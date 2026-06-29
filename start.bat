@@ -64,9 +64,9 @@ echo [WAIT] Waiting for backend...
 set /a COUNT=0
 
 :loop
-if %COUNT% geq 40 (
+if %COUNT% geq 120 (
     echo.
-    echo [ERROR] Backend did not start in 40 seconds.
+    echo [ERROR] Backend did not start in 120 seconds.
     echo         Check the minimized "Argus Backend" window for errors.
     goto :fail
 )

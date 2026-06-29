@@ -19,4 +19,6 @@ if __name__ == "__main__":
         host=HOST,
         port=PORT,
         reload=True,
+        reload_includes=["*.py"],
+        reload_excludes=["data/*", "logs/*", "*.db", "*.json", "*.pt"],
     )
