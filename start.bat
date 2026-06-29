@@ -25,7 +25,6 @@ if not defined PYTHON (
     exit /b 1
 )
 
-:: Verify Python version (need 3.11+)
 for /f "tokens=2 delims= " %%v in ('%PYTHON% --version 2^>^&1') do set PYVER=%%v
 echo [OK] Found Python %PYVER%
 
@@ -51,7 +50,7 @@ echo.
 echo [SETUP] Installing dependencies (this may take a few minutes on first run)...
 pip install -r config\requirements.txt --quiet 2>nul
 if errorlevel 1 (
-    echo [WARN] Some packages may have failed. Trying again with verbose output...
+    echo [WARN] Retrying with verbose output...
     pip install -r config\requirements.txt
     if errorlevel 1 (
         echo [ERROR] Failed to install dependencies.
@@ -71,52 +70,52 @@ if exist "data\multignn_model.pt" (
 ) else (
     echo [WARN] Model file not found at data\multignn_model.pt
     echo        App will start in degraded mode (no ML inference).
-    echo        Train the model with: python scripts\train.py --epochs 8
+)
+
+:: ── Kill existing process on port 8000 ──────────────────────────────────
+for /f "tokens=5" %%p in ('netstat -aon 2^>nul ^| findstr ":8000.*LISTENING"') do (
+    echo [CLEANUP] Killing existing process on port 8000 (PID %%p)
+    taskkill /PID %%p /F >nul 2>&1
 )
 
 :: ── Start Backend ────────────────────────────────────────────────────────
 echo.
 echo [START] Launching backend server...
 
-:: Kill any existing process on port 8000
-for /f "tokens=5" %%p in ('netstat -aon ^| findstr ":8000.*LISTENING" 2^>nul') do (
-    taskkill /PID %%p /F >nul 2>&1
-)
-
 set PYTHONPATH=src
-start /b "" python scripts\serve.py > nul 2>&1
+start "Argus Backend" /min cmd /c "python scripts\serve.py 2>&1 | findstr /v /c:"watchfiles""
 
 :: ── Wait for Backend Health ──────────────────────────────────────────────
-echo [WAIT] Waiting for backend to start...
+echo [WAIT] Waiting for backend to respond...
 set RETRIES=0
-set MAX_RETRIES=30
+set MAX_RETRIES=40
 
 :healthcheck
 if !RETRIES! geq %MAX_RETRIES% (
     echo.
-    echo [ERROR] Backend failed to start after 30 seconds.
-    echo         Check logs\error_logs\errors.log for details.
-    echo         Or try running manually: python scripts\serve.py
+    echo [ERROR] Backend failed to start after 40 seconds.
+    echo         Try running manually: python scripts\serve.py
     pause
     exit /b 1
 )
 
 timeout /t 1 /nobreak >nul
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/health' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/health' -UseBasicParsing -TimeoutSec 2; exit 0 } catch { exit 1 }" >nul 2>&1
 
 if errorlevel 1 (
     set /a RETRIES+=1
-    set /a DOTS=RETRIES %% 4
-    <nul set /p ="."
+    <nul set /p =".  "
     goto healthcheck
 )
 
 echo.
-echo [OK] Backend is running at http://localhost:8000
+echo [OK] Backend is running!
 
 :: ── Open Frontend ────────────────────────────────────────────────────────
 echo.
 echo [START] Opening dashboard in browser...
+timeout /t 1 /nobreak >nul
 start "" "http://localhost:8000"
 
 echo.
@@ -126,17 +125,6 @@ echo   Dashboard: http://localhost:8000
 echo   API docs:  http://localhost:8000/docs
 echo  ========================================
 echo.
-echo  Press Ctrl+C or close this window to stop.
+echo  Close this window to stop the server.
 echo.
-
-:: Keep window open so the background server stays alive
-:keepalive
-timeout /t 5 /nobreak >nul
-tasklist /fi "imagename eq python.exe" 2>nul | findstr /i "python" >nul
-if errorlevel 1 (
-    echo.
-    echo [STOP] Server process ended.
-    pause
-    exit /b 0
-)
-goto keepalive
+pause >nul
