@@ -305,7 +305,6 @@ async def add_request_context(request: Request, call_next):
 
 
 FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
-FRONTEND_DIST = FRONTEND_DIR / "dist"
 FRONTEND_PUBLIC = FRONTEND_DIR / "public"
 
 # Serve static assets: CSS, JS, and vendor libraries
@@ -322,8 +321,6 @@ if FRONTEND_PUBLIC.exists():
     app.mount("/static/public", StaticFiles(directory=str(FRONTEND_PUBLIC)), name="static-public")
 
 def get_frontend_dir():
-    if FRONTEND_DIST.exists():
-        return FRONTEND_DIST
     return FRONTEND_PUBLIC
 
 

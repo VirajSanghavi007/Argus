@@ -28,7 +28,7 @@ jobs:
           cache: pip
 
       - name: Install test dependencies
-        run: pip install -r backend/requirements-test.txt
+        run: pip install -r config/requirements-dev.txt
 
       - name: Run test suite
-        run: pytest backend/tests/ -v --tb=short
+        run: PYTHONPATH=src pytest src/backend/tests/ -v --tb=short
