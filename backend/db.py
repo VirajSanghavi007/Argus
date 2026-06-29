@@ -63,7 +63,12 @@ CREATE TABLE IF NOT EXISTS decisions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_decisions_alert ON decisions(alert_id);
+CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON decisions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_decisions_analyst ON decisions(analyst);
 CREATE INDEX IF NOT EXISTS idx_alerts_pattern  ON alerts(pattern_type);
+CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_alerts_source ON alerts(source);
+CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
 """
 
 
@@ -184,8 +189,17 @@ def decision_history(alert_id: str) -> list[dict]:
 
 def decision_counts() -> dict:
     """Aggregate current decisions by type — for dashboard tiles."""
+    conn = _require_conn()
+    with _lock:
+        rows = conn.execute(
+            """SELECT d.decision, COUNT(*) as cnt
+               FROM decisions d
+               JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
+                 ON d.alert_id = m.alert_id AND d.seq = m.mx
+               GROUP BY d.decision"""
+        ).fetchall()
     counts = {"confirm": 0, "review": 0, "dismiss": 0}
-    for d in current_decisions().values():
-        if d["decision"] in counts:
-            counts[d["decision"]] += 1
+    for r in rows:
+        if r["decision"] in counts:
+            counts[r["decision"]] = r["cnt"]
     return counts

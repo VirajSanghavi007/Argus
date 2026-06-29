@@ -52,7 +52,7 @@ warnings.filterwarnings("ignore")
 def _progress_bar(current: int, total: int, prefix: str = "", suffix: str = "", width: int = 40):
     pct = current / total
     filled = int(width * pct)
-    bar = "█" * filled + "░" * (width - filled)
+    bar = "=" * filled + "-" * (width - filled)
     print(f"\r  {prefix} |{bar}| {current}/{total} ({100*pct:.0f}%) {suffix}", end="", flush=True)
     if current >= total:
         print()

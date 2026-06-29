@@ -101,20 +101,45 @@ def _severity(prob: float) -> str:
 
 
 def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
-    """Returns (serialized_alerts, metrics). Raises if the model isn't trained."""
-    model, metrics = load_multignn()
+    """Returns (serialized_alerts, metrics). Raises if the model isn't trained or data is unavailable."""
+    try:
+        model, metrics = load_multignn()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load model: {e}. Train it first with: "
+            "python backend/multignn_model.py --epochs 8"
+        )
+
     if model is None:
         raise RuntimeError(
             "Multi-GNN model not found. Train it first: "
             "python backend/multignn_model.py --epochs 8"
         )
+
     model_thr = float(metrics.get("threshold", 0.5)) if metrics else 0.5
     threshold = max(model_thr, ALERT_THRESHOLD_FLOOR)
 
-    bundle = build_graph(max_rows=max_rows, return_df=True)
-    df = bundle["df"]
-    probs = score_transactions(model, bundle)
-    df = df.assign(_prob=probs)
+    try:
+        bundle = build_graph(max_rows=max_rows, return_df=True)
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            f"Transaction data not found: {e}. Ensure HI-Small_Trans.csv exists in data/ directory. "
+            "Check data ingestion pipeline."
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to build transaction graph: {e}. "
+            "Validate CSV structure with: python -c \"import pandas as pd; pd.read_csv('data/HI-Small_Trans.csv', nrows=5)\""
+        )
+
+    try:
+        df = bundle["df"]
+        probs = score_transactions(model, bundle)
+        df = df.assign(_prob=probs)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to score transactions: {e}. Check model compatibility and feature dimensions."
+        )
 
     flagged = df[df["_prob"] >= threshold]
     logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
