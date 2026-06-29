@@ -1,9 +1,9 @@
 """
 Backward-compatible client to separate database service.
-Delegates all operations to src.database.service.
+Delegates all operations to database.service.
 """
 
-from ...database import service
+from database import service
 
 # Expose service functions as module-level functions for backward compatibility
 init_db = service.init_db
