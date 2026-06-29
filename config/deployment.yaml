@@ -1,8 +1,14 @@
+# Documentation only — Render uses dashboard settings, not this file.
+# Kept in sync with actual Render configuration for reference.
 services:
   - type: web
-    name: aml-backend
+    name: argus-aml
     runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
+    buildCommand: pip install -r config/requirements.txt
+    startCommand: uvicorn src.backend.api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHONPATH
+        value: src
+      - key: PORT
+        generateValue: false
