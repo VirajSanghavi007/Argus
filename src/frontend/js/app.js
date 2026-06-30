@@ -23,29 +23,7 @@ function authStep1() {
   }
 
   authUser = { companyId, name };
-  document.getElementById('auth-step1').style.display = 'none';
-  document.getElementById('auth-step2').style.display = 'flex';
-  document.querySelector('.auth-code-digit').focus();
-}
-
-function authStep2() {
-  const digits = [...document.querySelectorAll('.auth-code-digit')].map(d => d.value);
-  const code = digits.join('');
-
-  if (code.length !== 6) {
-    showAuthError('auth-error2', 'Enter all 6 digits');
-    return;
-  }
-
-  // Accept any 6-digit code for demo
   completeAuth();
-}
-
-function authBack() {
-  document.getElementById('auth-step2').style.display = 'none';
-  document.getElementById('auth-step1').style.display = 'flex';
-  document.getElementById('auth-error2').style.display = 'none';
-  document.querySelectorAll('.auth-code-digit').forEach(d => d.value = '');
 }
 
 function showAuthError(id, msg) {
@@ -54,26 +32,6 @@ function showAuthError(id, msg) {
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 3000);
 }
-
-// Auto-advance code digit inputs
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.auth-code-digit').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const v = e.target.value.replace(/\D/g, '');
-      e.target.value = v;
-      if (v && e.target.dataset.idx < 5) {
-        const next = document.querySelector(`.auth-code-digit[data-idx="${+e.target.dataset.idx + 1}"]`);
-        if (next) next.focus();
-      }
-    });
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !e.target.value && e.target.dataset.idx > 0) {
-        const prev = document.querySelector(`.auth-code-digit[data-idx="${+e.target.dataset.idx - 1}"]`);
-        if (prev) { prev.focus(); prev.value = ''; }
-      }
-    });
-  });
-});
 
 function completeAuth() {
   const screen = document.getElementById('auth-screen');
@@ -183,8 +141,6 @@ function playCinematicIntro() {
     intro.style.opacity = '0';
     setTimeout(() => {
       intro.style.display = 'none';
-      document.getElementById('loading-overlay').style.display = 'flex';
-      startLoadingAnimation();
       init();
     }, 400);
   }, 1500);
@@ -335,18 +291,9 @@ function setStage(idx) {
 }
 
 async function init() {
-  const t0 = Date.now();
-  setStage(0);
   await pollUntilReady();
-
-  const minWait = s => Math.max(0, STAGE_DELAYS[s] - (Date.now() - t0));
-  await sleep(minWait(1)); setStage(1);
-  await sleep(minWait(2)); setStage(2);
-  await sleep(minWait(3)); setStage(3);
   await loadAllAlerts();
-  await sleep(minWait(4)); setStage(4);
-  await sleep(400);
-  stopLoadingAnimation();
+
   // Reveal nav/main hidden by inline style to prevent dashboard flash
   const hideStyle = document.querySelector('style');
   if (hideStyle && hideStyle.textContent.includes('display: none !important')) hideStyle.remove();
