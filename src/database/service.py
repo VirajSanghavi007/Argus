@@ -1,15 +1,13 @@
 """
-Database service — SQLite persistence for alerts and decisions.
-Separate from backend: owns schema, exposes operations.
+Database service — dual-backend: PostgreSQL when DATABASE_URL is set, SQLite otherwise.
 
-TODO: PostgreSQL migration for production
-  1. Replace sqlite3 with asyncpg or psycopg[binary]
-  2. Use Render managed PostgreSQL (free tier available)
-  3. Replace DB_PATH with DATABASE_URL env var (Render sets this automatically)
-  4. Replace PRAGMA WAL with PostgreSQL connection pool (asyncpg.create_pool)
-  5. Replace threading.Lock with connection pool concurrency
-  6. Update schema.sql: INTEGER PRIMARY KEY AUTOINCREMENT → SERIAL PRIMARY KEY,
-     DATETIME DEFAULT CURRENT_TIMESTAMP → TIMESTAMPTZ DEFAULT NOW()
+PostgreSQL is the production backend (Render / Supabase free tier).
+SQLite is the local dev fallback so the app runs without any setup.
+
+Usage:
+  export DATABASE_URL=postgresql://user:pass@host:5432/argus
+  # or for Supabase:
+  export DATABASE_URL=postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
 """
 
 import hashlib
@@ -17,139 +15,294 @@ import json
 import logging
 import os
 import secrets
-import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 logger = logging.getLogger("uvicorn.error")
 
 import config
 
-_conn: sqlite3.Connection | None = None
+# ── Backend selection ────────────────────────────────────────────────────────
+
+DATABASE_URL: str | None = os.environ.get("DATABASE_URL")
+_USE_PG = bool(DATABASE_URL)
+
+if _USE_PG:
+    try:
+        import psycopg2
+        import psycopg2.extras
+        import psycopg2.pool
+        _PG_AVAILABLE = True
+    except ImportError:
+        logger.warning("psycopg2 not installed — falling back to SQLite. pip install psycopg2-binary")
+        _USE_PG = False
+        _PG_AVAILABLE = False
+else:
+    import sqlite3
+    _PG_AVAILABLE = False
+
 _lock = threading.Lock()
 
+# ── PostgreSQL pool ──────────────────────────────────────────────────────────
+
+_pg_pool = None
+
+
+def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is None:
+        _pg_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=1, maxconn=10, dsn=DATABASE_URL
+        )
+    return _pg_pool
+
+
+class _PGConn:
+    """Context manager — borrows a connection from the pool."""
+    def __enter__(self):
+        self._conn = _get_pg_pool().getconn()
+        self._conn.autocommit = False
+        return self._conn
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type:
+            self._conn.rollback()
+        else:
+            self._conn.commit()
+        _get_pg_pool().putconn(self._conn)
+
+
+# ── SQLite connection ────────────────────────────────────────────────────────
+
+_sqlite_conn = None
+
+
+def _get_sqlite():
+    global _sqlite_conn
+    if _sqlite_conn is None:
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _sqlite_conn = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=10)
+        _sqlite_conn.row_factory = sqlite3.Row
+        _sqlite_conn.execute("PRAGMA journal_mode=WAL;")
+        _sqlite_conn.execute("PRAGMA busy_timeout=5000;")
+    return _sqlite_conn
+
+
+# ── Schema init ──────────────────────────────────────────────────────────────
 
 def init_db() -> None:
     """Initialize database and schema. Idempotent."""
-    global _conn
-    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=10)
-    _conn.row_factory = sqlite3.Row
-    with _lock:
-        _conn.execute("PRAGMA journal_mode=WAL;")
-        _conn.execute("PRAGMA busy_timeout=5000;")
-        if not config.SCHEMA_PATH.exists():
-            raise FileNotFoundError(f"Schema file missing: {config.SCHEMA_PATH}")
-        schema = config.SCHEMA_PATH.read_text()
-        _conn.executescript(schema)
-        _conn.commit()
-    logger.info(f"SQLite ready -> {config.DB_PATH}")
+    if _USE_PG:
+        schema_path = Path(config.SCHEMA_PATH).parent / "schema_postgres.sql"
+        if not schema_path.exists():
+            raise FileNotFoundError(f"Postgres schema missing: {schema_path}")
+        sql = schema_path.read_text()
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+        logger.info(f"PostgreSQL ready -> {DATABASE_URL.split('@')[-1]}")
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            schema = config.SCHEMA_PATH.read_text()
+            conn.executescript(schema)
+            conn.commit()
+        logger.info(f"SQLite ready -> {config.DB_PATH}")
 
 
-def _require_conn() -> sqlite3.Connection:
-    if _conn is None:
-        init_db()
-    assert _conn is not None
-    return _conn
+# ── Parameter placeholder helper ─────────────────────────────────────────────
+
+def _ph(n: int) -> str:
+    """Return n placeholders for the active backend: %s (PG) or ? (SQLite)."""
+    ph = "%s" if _USE_PG else "?"
+    return ", ".join([ph] * n)
 
 
-# ── Alerts ──────────────────────────────────────────────────────────────────
+# ── Alerts ───────────────────────────────────────────────────────────────────
 
 def replace_alerts(alerts: list[dict], scan_id: str = "") -> int:
-    """Replace alerts table with current scan output."""
-    conn = _require_conn()
-    with _lock:
-        conn.execute("DELETE FROM alerts;")
-        for a in alerts:
-            conn.execute(
-                """INSERT OR REPLACE INTO alerts
-                   (id, pattern_type, severity, confidence, ml_score, total_moved,
-                    node_count, txn_count, source, payload, scan_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    a["id"],
-                    a.get("patternType"),
-                    a.get("severity"),
-                    a.get("confidence"),
-                    a.get("mlScore"),
-                    a.get("totalMoved"),
-                    len(a.get("nodes", [])),
-                    len(a.get("transactions", [])),
-                    a.get("source", "labelled"),
-                    json.dumps(a),
-                    scan_id,
-                ),
-            )
-        conn.commit()
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM alerts;")
+                for a in alerts:
+                    cur.execute(
+                        f"INSERT INTO alerts (id,pattern_type,severity,confidence,ml_score,"
+                        f"total_moved,node_count,txn_count,source,payload,scan_id) "
+                        f"VALUES ({_ph(11)}) ON CONFLICT(id) DO UPDATE SET payload=EXCLUDED.payload",
+                        (a["id"], a.get("patternType"), a.get("severity"), a.get("confidence"),
+                         a.get("mlScore"), a.get("totalMoved"), len(a.get("nodes", [])),
+                         len(a.get("transactions", [])), a.get("source","labelled"),
+                         json.dumps(a), scan_id)
+                    )
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            conn.execute("DELETE FROM alerts;")
+            for a in alerts:
+                conn.execute(
+                    "INSERT OR REPLACE INTO alerts "
+                    "(id,pattern_type,severity,confidence,ml_score,total_moved,"
+                    "node_count,txn_count,source,payload,scan_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (a["id"], a.get("patternType"), a.get("severity"), a.get("confidence"),
+                     a.get("mlScore"), a.get("totalMoved"), len(a.get("nodes", [])),
+                     len(a.get("transactions", [])), a.get("source","labelled"),
+                     json.dumps(a), scan_id)
+                )
+            conn.commit()
     logger.info(f"Persisted {len(alerts)} alerts (scan_id={scan_id or 'n/a'})")
     return len(alerts)
 
 
 def load_alerts() -> dict:
-    """Return {alert_id: full_alert_dict}."""
-    conn = _require_conn()
-    with _lock:
-        rows = conn.execute("SELECT payload FROM alerts").fetchall()
-    out: dict = {}
-    for r in rows:
-        a = json.loads(r["payload"])
-        out[a["id"]] = a
-    return out
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT payload FROM alerts")
+                rows = cur.fetchall()
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            rows = conn.execute("SELECT payload FROM alerts").fetchall()
+    return {(a := json.loads(r["payload"]))["id"]: a for r in rows}
 
 
 def has_alerts() -> bool:
-    conn = _require_conn()
-    with _lock:
-        return conn.execute("SELECT 1 FROM alerts LIMIT 1").fetchone() is not None
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM alerts LIMIT 1")
+                return cur.fetchone() is not None
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            return conn.execute("SELECT 1 FROM alerts LIMIT 1").fetchone() is not None
 
 
-# ── Decisions (append-only audit log) ───────────────────────────────────────
+# ── Decisions ────────────────────────────────────────────────────────────────
 
 def record_decision(alert_id: str, decision: str, reason: str = "", analyst: str = "") -> None:
-    """Append decision to audit log."""
-    conn = _require_conn()
-    with _lock:
-        conn.execute(
-            "INSERT INTO decisions (alert_id, decision, reason, analyst) VALUES (?,?,?,?)",
-            (alert_id, decision, reason, analyst),
-        )
-        conn.commit()
+    ph = _ph(4)
+    sql = f"INSERT INTO decisions (alert_id,decision,reason,analyst) VALUES ({ph})"
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (alert_id, decision, reason, analyst))
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            conn.execute(sql, (alert_id, decision, reason, analyst))
+            conn.commit()
 
 
 def current_decisions() -> dict:
-    """Latest decision per alert from append-only log."""
-    conn = _require_conn()
-    with _lock:
-        rows = conn.execute(
-            """SELECT d.alert_id, d.decision, d.reason, d.analyst, d.created_at
-               FROM decisions d
-               JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
-                 ON d.alert_id = m.alert_id AND d.seq = m.mx"""
-        ).fetchall()
+    sql = """
+        SELECT d.alert_id, d.decision, d.reason, d.analyst, d.created_at
+        FROM decisions d
+        JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
+          ON d.alert_id = m.alert_id AND d.seq = m.mx
+    """
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            rows = conn.execute(sql).fetchall()
     return {
         r["alert_id"]: {
-            "decision": r["decision"],
-            "reason": r["reason"],
-            "analyst": r["analyst"],
-            "created_at": r["created_at"],
+            "decision": r["decision"], "reason": r["reason"],
+            "analyst": r["analyst"], "created_at": str(r["created_at"]),
         }
         for r in rows
     }
 
 
 def decision_history(alert_id: str) -> list[dict]:
-    """Chronological audit trail for one alert."""
-    conn = _require_conn()
-    with _lock:
-        rows = conn.execute(
-            """SELECT decision, reason, analyst, created_at
-               FROM decisions WHERE alert_id = ? ORDER BY seq ASC""",
-            (alert_id,),
-        ).fetchall()
+    ph = "%s" if _USE_PG else "?"
+    sql = f"SELECT decision,reason,analyst,created_at FROM decisions WHERE alert_id={ph} ORDER BY seq ASC"
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (alert_id,))
+                rows = cur.fetchall()
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            rows = conn.execute(sql, (alert_id,)).fetchall()
     return [dict(r) for r in rows]
 
 
-# ── Auth ────────────────────────────────────────────────────────────────────
+def decision_counts() -> dict:
+    sql = """
+        SELECT d.decision, COUNT(*) as cnt
+        FROM decisions d
+        JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
+          ON d.alert_id = m.alert_id AND d.seq = m.mx
+        GROUP BY d.decision
+    """
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            rows = conn.execute(sql).fetchall()
+    counts = {"confirm": 0, "review": 0, "dismiss": 0}
+    for r in rows:
+        if r["decision"] in counts:
+            counts[r["decision"]] = r["cnt"]
+    return counts
+
+
+# ── Live transaction ingestion (Postgres only) ────────────────────────────────
+
+def store_live_transactions(rows: list[dict]) -> int:
+    """Store ingested transactions in Postgres for neighborhood rescoring."""
+    if not _USE_PG:
+        return 0  # CSV fallback handled by ingest_store.py
+    if not rows:
+        return 0
+    with _PGConn() as conn:
+        with conn.cursor() as cur:
+            for r in rows:
+                cur.execute(
+                    f"INSERT INTO live_transactions "
+                    f"(timestamp,from_bank,from_account,to_bank,to_account,"
+                    f"amount_paid,amount_received,payment_currency,receiving_currency,payment_format) "
+                    f"VALUES ({_ph(10)})",
+                    (r.get("Timestamp"), r["From Bank"], r["From Account"],
+                     r["To Bank"], r["To Account"], r["Amount Paid"],
+                     r.get("Amount Received"), r.get("Payment Currency","US Dollar"),
+                     r.get("Receiving Currency","US Dollar"), r.get("Payment Format","ACH"))
+                )
+    return len(rows)
+
+
+def fetch_unscanned_transactions() -> list[dict]:
+    """Return all live_transactions not yet scored."""
+    if not _USE_PG:
+        return []
+    with _PGConn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM live_transactions WHERE scanned=FALSE ORDER BY ingested_at")
+            return [dict(r) for r in cur.fetchall()]
+
+
+def mark_transactions_scanned(ids: list[int]) -> None:
+    if not _USE_PG or not ids:
+        return
+    with _PGConn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE live_transactions SET scanned=TRUE WHERE id = ANY(%s)", (ids,))
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
 _SESSION_TTL_HOURS = 8
 
@@ -160,77 +313,99 @@ def _hash_password(password: str) -> str:
 
 
 def seed_default_users() -> None:
-    conn = _require_conn()
     defaults = [
         ("UBI-AML-2026", "admin", "admin123"),
         ("UBI-AML-2026", "analyst1", "analyst2026"),
         ("UBI-AML-2026", "demo", "demo2026"),
     ]
-    with _lock:
-        for company_id, username, password in defaults:
-            pw_hash = _hash_password(password)
-            conn.execute(
-                "INSERT OR IGNORE INTO users (company_id, username, password_hash) VALUES (?,?,?)",
-                (company_id, username, pw_hash),
-            )
-        conn.commit()
+    for company_id, username, password in defaults:
+        pw_hash = _hash_password(password)
+        if _USE_PG:
+            with _PGConn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO users (company_id,username,password_hash) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                        (company_id, username, pw_hash)
+                    )
+        else:
+            conn = _get_sqlite()
+            with _lock:
+                conn.execute(
+                    "INSERT OR IGNORE INTO users (company_id,username,password_hash) VALUES (?,?,?)",
+                    (company_id, username, pw_hash)
+                )
+            conn.commit()
 
 
 def verify_user(company_id: str, username: str, password: str) -> dict | None:
-    conn = _require_conn()
     pw_hash = _hash_password(password)
-    with _lock:
-        row = conn.execute(
-            "SELECT id, company_id, username, role FROM users WHERE company_id=? AND username=? AND password_hash=?",
-            (company_id, username, pw_hash),
-        ).fetchone()
-    return dict(row) if row else None
+    ph = "%s" if _USE_PG else "?"
+    sql = f"SELECT id,company_id,username,role FROM users WHERE company_id={ph} AND username={ph} AND password_hash={ph}"
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (company_id, username, pw_hash))
+                row = cur.fetchone()
+                return dict(row) if row else None
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            row = conn.execute(sql, (company_id, username, pw_hash)).fetchone()
+        return dict(row) if row else None
 
 
 def create_session(user_id: int, company_id: str, username: str) -> str:
-    conn = _require_conn()
     token = secrets.token_urlsafe(32)
-    expires = (datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with _lock:
-        conn.execute(
-            "INSERT INTO sessions (token, user_id, company_id, username, expires_at) VALUES (?,?,?,?,?)",
-            (token, user_id, company_id, username, expires),
-        )
-        conn.commit()
+    expires = datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO sessions (token,user_id,company_id,username,expires_at) VALUES (%s,%s,%s,%s,%s)",
+                    (token, user_id, company_id, username, expires)
+                )
+    else:
+        expires_str = expires.strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn = _get_sqlite()
+        with _lock:
+            conn.execute(
+                "INSERT INTO sessions (token,user_id,company_id,username,expires_at) VALUES (?,?,?,?,?)",
+                (token, user_id, company_id, username, expires_str)
+            )
+            conn.commit()
     return token
 
 
 def validate_session(token: str) -> dict | None:
-    conn = _require_conn()
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with _lock:
-        row = conn.execute(
-            "SELECT user_id, company_id, username FROM sessions WHERE token=? AND expires_at > ?",
-            (token, now),
-        ).fetchone()
-    return dict(row) if row else None
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT user_id,company_id,username FROM sessions WHERE token=%s AND expires_at > NOW()",
+                    (token,)
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+    else:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn = _get_sqlite()
+        with _lock:
+            row = conn.execute(
+                "SELECT user_id,company_id,username FROM sessions WHERE token=? AND expires_at > ?",
+                (token, now)
+            ).fetchone()
+        return dict(row) if row else None
 
 
 def delete_session(token: str) -> None:
-    conn = _require_conn()
-    with _lock:
-        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
-        conn.commit()
-
-
-def decision_counts() -> dict:
-    """Current decision aggregate."""
-    conn = _require_conn()
-    with _lock:
-        rows = conn.execute(
-            """SELECT d.decision, COUNT(*) as cnt
-               FROM decisions d
-               JOIN (SELECT alert_id, MAX(seq) AS mx FROM decisions GROUP BY alert_id) m
-                 ON d.alert_id = m.alert_id AND d.seq = m.mx
-               GROUP BY d.decision"""
-        ).fetchall()
-    counts = {"confirm": 0, "review": 0, "dismiss": 0}
-    for r in rows:
-        if r["decision"] in counts:
-            counts[r["decision"]] = r["cnt"]
-    return counts
+    ph = "%s" if _USE_PG else "?"
+    sql = f"DELETE FROM sessions WHERE token={ph}"
+    if _USE_PG:
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (token,))
+    else:
+        conn = _get_sqlite()
+        with _lock:
+            conn.execute(sql, (token,))
+            conn.commit()
