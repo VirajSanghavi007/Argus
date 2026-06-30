@@ -456,6 +456,7 @@ def status(request: Request):
         "unlabelled_count": unlabelled,
         "overlap_count": 0,
         "patterns": patterns,
+        "activity_bins": ML_METRICS.get("activity_bins", {}),
     }
     if PIPELINE_ERROR:
         result["error"] = PIPELINE_ERROR

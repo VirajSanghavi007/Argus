@@ -292,8 +292,11 @@ function setStage(idx) {
   document.getElementById('load-bar').style.width = BAR_PCTS[Math.min(idx,4)] + '%';
 }
 
+let activityBins = null; // {bins: [], labels: []} from backend
+
 async function init() {
-  await pollUntilReady();
+  const statusData = await pollUntilReady();
+  activityBins = statusData?.activity_bins || null;
   await loadAllAlerts();
 
   // Reveal nav/main hidden by inline style to prevent dashboard flash
@@ -443,31 +446,33 @@ function renderDashboard() {
     });
   }
 
-  // Timeline — bin alerts by their actual start timestamp across a 48h window
-  const bins = new Array(48).fill(0);
-  // Find earliest and latest timestamps across all alerts
-  const tsDates = allAlerts.map(a => {
-    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
-    return ts ? new Date(ts.replace(' ','T')) : null;
-  }).filter(Boolean);
-  const WIN = tsDates.length ? new Date(Math.min(...tsDates)) : new Date(Date.now() - 48*3600000);
-  allAlerts.forEach(a => {
-    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
-    if (ts) {
-      const h = Math.floor((new Date(ts.replace(' ','T')) - WIN) / 3600000);
-      if (h >= 0 && h < 48) { bins[h]++; return; }
-    }
-    // spread remainder naturally using confidence as seed
-    const h = Math.floor((a.confidence || Math.random()) * 47);
-    bins[h]++;
-  });
+  // Timeline — use real per-transaction timestamps from backend pipeline
+  let bins, tlLabels;
+  if (activityBins && activityBins.bins && activityBins.bins.length === 48) {
+    bins = activityBins.bins;
+    tlLabels = activityBins.labels;
+  } else {
+    bins = new Array(48).fill(0);
+    const tsDates = allAlerts.map(a => {
+      const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+      return ts ? new Date(ts.replace(' ','T')) : null;
+    }).filter(Boolean);
+    const WIN2 = tsDates.length ? new Date(Math.min(...tsDates)) : new Date(Date.now() - 48*3600000);
+    allAlerts.forEach(a => {
+      const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+      if (ts) {
+        const h = Math.floor((new Date(ts.replace(' ','T')) - WIN2) / 3600000);
+        if (h >= 0 && h < 48) { bins[h]++; return; }
+      }
+    });
+    tlLabels = Array.from({length:48},(_,i)=>{
+      const d = new Date(WIN2.getTime() + i*3600000);
+      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
+    });
+  }
   if (dbCharts.tl) dbCharts.tl.destroy();
   const isDark = document.body.classList.contains('dark');
   const axisColor = isDark ? '#94A3B8' : '#475569';
-  const tlLabels = Array.from({length:48},(_,i)=>{
-    const d = new Date(WIN.getTime() + i*3600000);
-    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
-  });
   dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
     type:'line',
     data:{ labels: tlLabels,

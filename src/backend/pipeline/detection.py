@@ -184,8 +184,38 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     raw_alerts = raw_alerts[:natural_cap]
     _assign_severities(raw_alerts)
     serialized = serialize_alerts(raw_alerts)
+
+    # Build 48-bin activity histogram from ALL flagged transaction timestamps
+    # so the chart reflects real transaction timing, not just alert start times
+    activity_bins = _build_activity_bins(flagged)
+
     logger.info(f"Multi-GNN produced {len(serialized)} alert clusters")
-    return serialized, (metrics or {})
+    return serialized, {**(metrics or {}), "activity_bins": activity_bins}
+
+
+def _build_activity_bins(flagged) -> dict:
+    """48-bin histogram of flagged transaction timestamps + label strings."""
+    import pandas as pd
+    ts_col = next((c for c in flagged.columns if "timestamp" in c.lower()), None)
+    if ts_col is None or flagged.empty:
+        return {"bins": [0]*48, "labels": [f"{i}h" for i in range(48)]}
+    ts = pd.to_datetime(flagged[ts_col], errors="coerce").dropna()
+    if ts.empty:
+        return {"bins": [0]*48, "labels": [f"{i}h" for i in range(48)]}
+    win_start = ts.min().floor("h")
+    win_end   = win_start + pd.Timedelta(hours=48)
+    bins = [0] * 48
+    for t in ts:
+        h = int((t - win_start).total_seconds() // 3600)
+        if 0 <= h < 48:
+            bins[h] += 1
+    labels = [(win_start + pd.Timedelta(hours=i)).strftime("%-m/%-d %H:00")
+              if hasattr(pd.Timestamp, "strftime") else f"{i}h" for i in range(48)]
+    try:
+        labels = [(win_start + pd.Timedelta(hours=i)).strftime("%m/%d %H:00") for i in range(48)]
+    except Exception:
+        pass
+    return {"bins": bins, "labels": labels}
 
 
 def _node_key(bank, acct) -> str:
