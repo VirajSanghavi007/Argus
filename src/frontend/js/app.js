@@ -147,47 +147,47 @@ function playCinematicIntro() {
   const tagline = document.getElementById('cine-tagline');
 
   // Fade in content container
-  setTimeout(() => { content.style.transition = 'opacity .8s ease'; content.style.opacity = '1'; }, 200);
+  setTimeout(() => { content.style.transition = 'opacity .4s ease'; content.style.opacity = '1'; }, 100);
 
   // Shield scales in
   setTimeout(() => {
-    shield.style.transition = 'opacity 1s ease, transform 1s ease';
+    shield.style.transition = 'opacity .4s ease, transform .4s ease';
     shield.style.opacity = '1'; shield.style.transform = 'scale(1)';
-  }, 400);
+  }, 150);
 
   // Red-blue line extends
-  setTimeout(() => { line.style.width = '280px'; }, 1000);
+  setTimeout(() => { line.style.width = '280px'; }, 400);
 
   // Bank name types in
   setTimeout(() => {
-    name.style.transition = 'opacity .8s ease, transform .8s ease';
+    name.style.transition = 'opacity .3s ease, transform .3s ease';
     name.style.opacity = '1'; name.style.transform = 'translateY(0)';
-  }, 1200);
+  }, 500);
 
   // Sub text
   setTimeout(() => {
-    sub.style.transition = 'opacity .6s ease, transform .6s ease';
+    sub.style.transition = 'opacity .3s ease, transform .3s ease';
     sub.style.opacity = '1'; sub.style.transform = 'translateY(0)';
-  }, 1800);
+  }, 700);
 
   // Tagline
   setTimeout(() => {
-    tagline.style.transition = 'opacity .6s ease';
+    tagline.style.transition = 'opacity .3s ease';
     tagline.style.opacity = '1';
-  }, 2400);
+  }, 900);
 
   // Hold for a beat, then fade out → loading screen
   setTimeout(() => {
     cancelAnimationFrame(cineFrame);
-    intro.style.transition = 'opacity .8s ease';
+    intro.style.transition = 'opacity .4s ease';
     intro.style.opacity = '0';
     setTimeout(() => {
       intro.style.display = 'none';
       document.getElementById('loading-overlay').style.display = 'flex';
       startLoadingAnimation();
       init();
-    }, 800);
-  }, 4200);
+    }, 400);
+  }, 1500);
 }
 
 /* ════════════════════════════════════════════
@@ -320,7 +320,7 @@ let dbCharts     = {};
 ════════════════════════════════════════════ */
 const STAGES = ['ls-0','ls-1','ls-2','ls-3','ls-4'];
 const BAR_PCTS = [10, 30, 60, 85, 100];
-const STAGE_DELAYS = [0, 1500, 3000, 4800, 6500];
+const STAGE_DELAYS = [0, 300, 600, 900, 1200];
 
 function setStage(idx) {
   STAGES.forEach((id, i) => {
@@ -367,6 +367,8 @@ async function init() {
 
 async function pollUntilReady() {
   let lastCount = 0;
+  const statusDot = document.getElementById('status-dot');
+  const statusLabel = document.getElementById('status-label');
   while (true) {
     try {
       const r = await fetch(`${API_BASE}/status`).catch(() => null);
@@ -375,22 +377,21 @@ async function pollUntilReady() {
         setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
         lastCount = d.alert_count;
         if (d.status === 'error') {
-          document.getElementById('status-dot').className = 'status-dot' ;
-          document.getElementById('status-dot').style.background = 'var(--red)';
-          document.getElementById('status-label').textContent = 'Pipeline error';
+          if (statusDot) { statusDot.className = 'status-dot'; statusDot.style.background = 'var(--red)'; }
+          if (statusLabel) statusLabel.textContent = 'Pipeline error';
           document.querySelector('.load-sub').textContent = d.error || 'Pipeline failed to start.';
           document.querySelector('.load-sub').style.color = 'var(--red)';
           return d;
         }
         if (d.status === 'ready') {
-          document.getElementById('status-dot').className = 'status-dot ready';
-          document.getElementById('status-label').textContent =
+          if (statusDot) statusDot.className = 'status-dot ready';
+          if (statusLabel) statusLabel.textContent =
             `Live · ${d.alert_count} alerts | L:${d.labelled_count} U:${d.unlabelled_count} ∩:${d.overlap_count}`;
           return d;
         }
       }
     } catch(e) {}
-    await sleep(3000);
+    await sleep(1000);
   }
 }
 
@@ -747,9 +748,28 @@ function renderGraph() {
   if (cy) cy.destroy();
 
   const elements = [];
+  // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
+  let intermediaryIdx = 0;
+  const intermediaryNodes = currentAlert.nodes.filter(n => {
+    const r = (n.role||'').toLowerCase();
+    return r !== 'source' && r !== 'destination';
+  });
+  const needsNumbering = intermediaryNodes.length > 1;
+
   currentAlert.nodes.forEach(n => {
     const c = SEV_NODE[n.sev]||SEV_NODE.low;
-    elements.push({ data:{ id:n.id, label:n.id, sev:n.sev, role:n.role,
+    const r = (n.role||'').toLowerCase();
+    let shortLabel;
+    if (r === 'source') {
+      shortLabel = 'S';
+    } else if (r === 'destination') {
+      shortLabel = 'D';
+    } else {
+      // intermediary, distributor, coordinator, hub, etc.
+      shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
+      intermediaryIdx++;
+    }
+    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
       bank:n.bank, vol:n.vol, txn:n.txn }, style:{
       'background-color':c.bg, 'border-color':c.border,
     }});
@@ -769,7 +789,7 @@ function renderGraph() {
         'background-color':'data(background-color)',
         'border-color':'data(border-color)',
         'border-width':2, 'color':'#0F172A',
-        'font-size':9, 'font-family':'DM Mono, monospace',
+        'font-size':9, 'font-family':'Poppins, sans-serif',
         'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
       }},
       { selector:'edge', style:{

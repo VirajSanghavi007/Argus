@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>AML Intelligence Platform</title>
 <link rel="stylesheet" href="/static/lib/fonts.css"/>
-<link rel="stylesheet" href="/static/css/style.css?v=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css?v=7"/>
 <script src="/static/lib/cytoscape.min.js"></script>
 <script src="/static/lib/chart.umd.min.js"></script>
 <style>nav, main, #tooltip, #toasts { display: none !important; }</style>
@@ -118,10 +121,8 @@
   </div>
   <div class="nav-status">
     <span id="nav-user" style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:var(--muted);margin-right:var(--sp-2);display:none"></span>
-    <div class="status-dot loading" id="status-dot" aria-hidden="true"></div>
-    <span class="status-label" id="status-label" role="status">Loading...</span>
     <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode" style="
-      margin-left:var(--sp-2);background:none;border:1px solid var(--border);border-radius:var(--r);
+      background:none;border:1px solid var(--border);border-radius:var(--r);
       padding:var(--sp-1) var(--sp-2);cursor:pointer;font-size:var(--text-base);color:var(--muted);line-height:1;
       transition:all .15s ease;flex-shrink:0">☀️</button>
   </div>
@@ -335,6 +336,6 @@
 </div>
 <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-<script src="/static/js/app.js?v=1"></script>
+<script src="/static/js/app.js?v=9"></script>
 </body>
 </html>
