@@ -38,64 +38,77 @@ PATTERN_DESCRIPTIONS = {
 }
 
 
-def _classify_topology(sub: nx.DiGraph) -> str:
+def _detect_all_patterns(sub: nx.DiGraph) -> list[str]:
+    """Return every AML pattern the subgraph satisfies, ordered by specificity.
+    First entry = primary (most specific); rest = secondary co-patterns."""
     nodes = list(sub.nodes())
     n = len(nodes)
     if n < 2:
-        return "RANDOM"
+        return ["RANDOM"]
 
-    in_deg = dict(sub.in_degree())
+    in_deg  = dict(sub.in_degree())
     out_deg = dict(sub.out_degree())
+    found   = []
 
+    # CYCLE
     if all(in_deg[v] == 1 and out_deg[v] == 1 for v in nodes):
         try:
             nx.find_cycle(sub)
-            return "CYCLE"
+            found.append("CYCLE")
         except nx.NetworkXNoCycle:
             pass
 
+    # FAN_OUT
     hubs_out = [v for v in nodes if out_deg[v] >= 2 and in_deg[v] <= 1]
     leaves_in = [v for v in nodes if out_deg[v] == 0]
     if len(hubs_out) >= 1 and len(leaves_in) >= max(2, n // 2):
-        return "FAN_OUT"
+        found.append("FAN_OUT")
 
+    # FAN_IN
     hubs_in = [v for v in nodes if in_deg[v] >= 2 and out_deg[v] <= 1]
-    senders = [v for v in nodes if in_deg[v] == 0]
+    senders  = [v for v in nodes if in_deg[v] == 0]
     if len(hubs_in) >= 1 and len(senders) >= max(2, n // 2):
-        return "FAN_IN"
+        found.append("FAN_IN")
 
+    # SCATTER_GATHER
     origins = [v for v in nodes if in_deg[v] == 0]
-    dests = [v for v in nodes if out_deg[v] == 0]
+    dests   = [v for v in nodes if out_deg[v] == 0]
     middles = [v for v in nodes if in_deg[v] >= 1 and out_deg[v] >= 1]
     if len(origins) == 1 and len(dests) == 1 and len(middles) >= 1:
-        return "SCATTER_GATHER"
+        found.append("SCATTER_GATHER")
 
+    # GATHER_SCATTER
     hubs_gs = [v for v in nodes if in_deg[v] >= 2 and out_deg[v] >= 2]
     if len(hubs_gs) == 1 and len(senders) >= 2 and len(dests) >= 2:
-        return "GATHER_SCATTER"
+        found.append("GATHER_SCATTER")
 
-    # Bipartite: only classify as such when BOTH groups are large (≥3 each),
-    # otherwise it's really a scatter/gather or stack variant
+    # BIPARTITE
     try:
         if nx.is_bipartite(sub.to_undirected()):
             sets = nx.bipartite.sets(sub.to_undirected())
             if min(len(s) for s in sets) >= 3:
-                return "BIPARTITE"
-            # Small bipartite → more meaningful AML label
-            if len(origins) >= 2 and len(dests) >= 2:
-                return "SCATTER_GATHER"
+                found.append("BIPARTITE")
+            elif len(origins) >= 2 and len(dests) >= 2:
+                if "SCATTER_GATHER" not in found:
+                    found.append("SCATTER_GATHER")
     except Exception:
         pass
 
-    # STACK = linear chain of ≥3 nodes — single S→D hop is just RANDOM
+    # STACK
     if n >= 3 and all(in_deg[v] <= 1 and out_deg[v] <= 1 for v in nodes):
-        return "STACK"
+        found.append("STACK")
 
-    return "RANDOM"
+    return found if found else ["RANDOM"]
+
+
+def _classify_topology(sub: nx.DiGraph) -> str:
+    """Return the single primary AML pattern (first match from _detect_all_patterns)."""
+    return _detect_all_patterns(sub)[0]
 # Use top-1% of scores as the floor — adapts to any score scale.
 # At 100k rows this flags ~1000 transactions → ~50-150 alert clusters.
 ALERT_THRESHOLD_PERCENTILE = 99
 MAX_ALERTS = 200
+MIN_CLUSTER_AMOUNT = 1000  # Skip clusters where total moved < $1000 (noise/artefact)
 
 
 def _assign_severities(raw_alerts: list) -> None:
@@ -175,7 +188,7 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
         if len(comp) < MIN_CLUSTER_NODES:
             continue
         raw = _component_to_alert(ci, comp, G, flagged, explanations)
-        if raw is not None:
+        if raw is not None and raw["total_moved"] >= MIN_CLUSTER_AMOUNT:
             raw_alerts.append(raw)
 
     raw_alerts.sort(key=lambda a: a["confidence"], reverse=True)
