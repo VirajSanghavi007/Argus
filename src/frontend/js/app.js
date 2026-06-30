@@ -234,6 +234,11 @@ const API_BASE = (window.location.protocol === 'file:')
   : '';
 
 /* ── Pattern formatting ── */
+function formatAlertId(id) {
+  // mgnn_7 → UBI-AML-0007
+  const num = parseInt((id||'').replace(/\D+/g,''), 10);
+  return isNaN(num) ? id.toUpperCase() : `UBI-AML-${String(num).padStart(4,'0')}`;
+}
 function formatPatternName(pt) {
   const map = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN',
@@ -511,7 +516,7 @@ function renderSidebar() {
     if (patFilter !== 'all' && a.patternType !== patFilter) return false;
     if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
     if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
-             !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
+             !a.id.toLowerCase().includes(q) && !formatAlertId(a.id).toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
     return true;
   });
   const el = document.getElementById('alert-list');
@@ -528,7 +533,7 @@ function renderSidebar() {
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
       ${decDot}
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
-        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${a.id.toUpperCase().replace('_', '-')}</div>
+        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${formatAlertId(a.id)}</div>
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
       </div>
       
@@ -591,7 +596,6 @@ async function loadAlertById(id) {
   renderGraph();
   renderRightPanel();
   renderTimeline();
-  toast(`Loaded: ${formatPatternName(currentAlert.patternType)}`, 'info');
 }
 
 /* ════════════════════════════════════════════
@@ -953,7 +957,7 @@ function renderCaseManager() {
     const dec=decisions[a.id];
     const decColors={confirm:'var(--green)',review:'var(--amber)',dismiss:'var(--red)'};
     return `<tr>
-      <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${a.id}</td>
+      <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${formatAlertId(a.id)}</td>
       <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType)}</td>
       <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span></td>
       <td>${a.totalMoved}</td>
@@ -1154,7 +1158,7 @@ function renderSuppressed(suppressed) {
   if (!suppressed.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   tbody.innerHTML=suppressed.map(a=>`<tr>
-    <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${a.id}</td>
+    <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${formatAlertId(a.id)}</td>
     <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType||'')}</td>
     <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity||'—'}</span></td>
     <td style="font-size:var(--text-sm);color:var(--muted)">${a.exemption_reason||'—'}</td>

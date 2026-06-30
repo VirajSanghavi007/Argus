@@ -551,6 +551,14 @@ input,textarea,select{
   border-color:var(--blue);outline:none;
   box-shadow:0 0 0 3px rgba(0,87,156,.15);
 }
+.auth-field input:-webkit-autofill,
+.auth-field input:-webkit-autofill:hover,
+.auth-field input:-webkit-autofill:focus{
+  -webkit-box-shadow:0 0 0 1000px rgba(255,255,255,.8) inset;
+  -webkit-text-fill-color:#0F172A;
+  border:1px solid #CBD5E1;
+  transition:background-color 5000s ease-in-out 0s;
+}
 .auth-field input::placeholder{color:#475569}
 .auth-submit{
   margin-top:8px;padding:14px;font-size:13px;border-radius:8px;
