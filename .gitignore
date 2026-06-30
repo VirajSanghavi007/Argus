@@ -58,3 +58,6 @@ node_modules/
 # pipeline_cache.json slimmed to ~20MB (transactions capped at 150/alert)
 # fraud_model.pkl is ~648KB
 data/*.csv
+
+# Local pip wheel cache — never commit (huge, platform-specific)
+wheels/
