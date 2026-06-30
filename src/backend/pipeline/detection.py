@@ -209,12 +209,7 @@ def _build_activity_bins(flagged) -> dict:
         h = int((t - win_start).total_seconds() // 3600)
         if 0 <= h < 48:
             bins[h] += 1
-    labels = [(win_start + pd.Timedelta(hours=i)).strftime("%-m/%-d %H:00")
-              if hasattr(pd.Timestamp, "strftime") else f"{i}h" for i in range(48)]
-    try:
-        labels = [(win_start + pd.Timedelta(hours=i)).strftime("%m/%d %H:00") for i in range(48)]
-    except Exception:
-        pass
+    labels = [(win_start + pd.Timedelta(hours=i)).strftime("%m/%d %H:00") for i in range(48)]
     return {"bins": bins, "labels": labels}
 
 
