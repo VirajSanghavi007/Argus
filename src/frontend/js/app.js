@@ -395,8 +395,16 @@ async function pollUntilReady() {
 }
 
 async function loadAllAlerts() {
-  const r = await fetch(`${API_BASE}/alerts`);
-  allAlerts = await r.json();
+  try {
+    const r = await fetch(`${API_BASE}/alerts`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    allAlerts = await r.json();
+    if (!Array.isArray(allAlerts)) allAlerts = [];
+  } catch (e) {
+    console.error('[loadAllAlerts]', e);
+    allAlerts = [];
+    toast(`Failed to load alerts: ${e.message}`, 'error');
+  }
   await loadDecisions();
 }
 
