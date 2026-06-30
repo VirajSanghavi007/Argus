@@ -456,7 +456,6 @@ async function init() {
     document.getElementById('nav-user').style.display = 'none';
     renderDashboard();
     renderSidebar();
-    toast(`Welcome, ${authUser?.name || 'Analyst'}`, 'success');
   } catch (e) {
     showInitError(e.message || 'Unexpected initialization error.');
   }
