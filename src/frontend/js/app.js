@@ -890,36 +890,11 @@ function renderRightPanel() {
     <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-      <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
 
-  // Source / signals
-  const srcEl = document.getElementById('ir-source-sec');
-  srcEl.style.display='block';
-  const sigs = a.signalsTriggered||[];
-  let srcHtml = `<span class="label-up">Detection Source</span>`;
-  if (a.source==='labelled') {
-    srcHtml += `<div class="signal-chip blue">🏷 Is Laundering label filter</div>`;
-  } else if (a.source==='both') {
-    srcHtml += `<div class="signal-chip" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)">⭐ Cross-validated by both modes</div>`;
-  } else {
-    srcHtml += sigs.map(s=>`<div class="signal-chip">${SIGNAL_ICONS[s]||'•'} ${s}</div>`).join('') ||
-      `<span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No signals recorded</span>`;
-  }
-  srcEl.innerHTML = srcHtml;
-
-  // Roles
-  const roleEl = document.getElementById('ir-roles-sec');
-  roleEl.style.display='block';
-  const roleCnt = {};
-  (a.nodes||[]).forEach(n=>{ roleCnt[n.role]=(roleCnt[n.role]||{count:0,sev:n.sev}); roleCnt[n.role].count++; });
-  const roleColors = {high:'var(--red)',medium:'var(--amber)',low:'var(--green)'};
-  roleEl.innerHTML = `<span class="label-up">Node Roles</span>` +
-    Object.entries(roleCnt).map(([role,{count,sev}])=>
-      `<div class="role-row"><div class="role-dot" style="background:${roleColors[sev]||'#94A3B8'}"></div>
-       <span>${role}</span><span style="color:var(--muted);margin-left:auto">×${count}</span></div>`
-    ).join('');
+  document.getElementById('ir-source-sec').style.display='none';
+  document.getElementById('ir-roles-sec').style.display='none';
 
   renderDecStatus();
 }
