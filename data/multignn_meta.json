@@ -1,0 +1,47 @@
+{
+  "metrics": {
+    "f1": 0.0235,
+    "precision": 0.0156,
+    "recall": 0.0478,
+    "auc": 0.5974,
+    "ap": 0.0125,
+    "threshold": 0.1,
+    "n_nodes": 181734,
+    "n_edges": 268433,
+    "n_train": 201324,
+    "n_val": 40265,
+    "n_test": 26844,
+    "epochs": 8,
+    "hidden": 64,
+    "layers": 3,
+    "max_rows": 600000,
+    "positives": 305
+  },
+  "encoders": {
+    "currencies": [
+      "US Dollar",
+      "Brazil Real",
+      "Saudi Riyal",
+      "UK Pound",
+      "Ruble",
+      "Euro",
+      "Australian Dollar",
+      "Shekel",
+      "Bitcoin",
+      "Mexican Peso",
+      "Yen",
+      "Canadian Dollar",
+      "Swiss Franc",
+      "Rupee",
+      "Yuan"
+    ],
+    "formats": [
+      "Credit Card",
+      "Cheque",
+      "ACH",
+      "Cash",
+      "Bitcoin",
+      "Wire"
+    ]
+  }
+}
