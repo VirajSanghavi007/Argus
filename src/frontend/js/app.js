@@ -881,8 +881,21 @@ function applyStep(idx) {
     </div>`;
   if (cy) {
     cy.edges().removeClass('hl-edge');
-    const me = currentAlert.edges.find(e=>e.txIdx===idx);
-    if (me) cy.edges(`[id="${me.id}"]`).addClass('hl-edge');
+    cy.elements().removeClass('dim');
+    // edges are in the same order as transactions — match by position
+    const me = currentAlert.edges[idx];
+    if (me) {
+      const cyEdge = cy.edges(`[id="${me.id}"]`);
+      if (cyEdge.length) {
+        cyEdge.addClass('hl-edge');
+        // Dim everything except this edge and its endpoint nodes
+        const src = cyEdge.source();
+        const tgt = cyEdge.target();
+        cy.elements().not(cyEdge).not(src).not(tgt).addClass('dim');
+        // Pan + zoom to the active edge so user can see it
+        cy.animate({ fit:{ eles: cyEdge.union(src).union(tgt), padding:80 }, duration:250, easing:'ease-in-out-quad' });
+      }
+    }
   }
   updateCounter(); renderDots();
 }

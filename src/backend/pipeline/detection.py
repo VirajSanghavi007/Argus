@@ -87,7 +87,8 @@ def _classify_topology(sub: nx.DiGraph) -> str:
     except Exception:
         pass
 
-    if all(in_deg[v] <= 1 and out_deg[v] <= 1 for v in nodes):
+    # STACK = linear chain of ≥3 nodes — single S→D hop is just RANDOM
+    if n >= 3 and all(in_deg[v] <= 1 and out_deg[v] <= 1 for v in nodes):
         return "STACK"
 
     return "RANDOM"
