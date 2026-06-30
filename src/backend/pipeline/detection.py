@@ -110,9 +110,17 @@ MIN_CLUSTER_AMOUNT = 1000  # Skip clusters where total moved < $1000 (noise/arte
 
 
 def _assign_severities(raw_alerts: list) -> None:
-    """Rank clusters by confidence and assign severity by percentile across this run."""
+    """Rank clusters by confidence and assign severity by percentile across this run.
+
+    Also prepends a relative-rank evidence line — every cluster here already
+    cleared the global top-1% scoring gate, so that fact doesn't distinguish
+    one alert from another. What DOES vary is how this cluster's confidence
+    compares to the OTHER clusters flagged in the same run, which is what an
+    analyst actually needs to triage.
+    """
     if not raw_alerts:
         return
+    import bisect
     scores = sorted(a["confidence"] for a in raw_alerts)
     n = len(scores)
     p85 = scores[int(n * 0.85)]
@@ -123,6 +131,17 @@ def _assign_severities(raw_alerts: list) -> None:
         a["severity"] = sev
         for node in a.get("nodes_list", []):
             node["sev"] = sev
+
+        # Relative rank among this run's alerts (1 = most confident).
+        rank = n - bisect.bisect_left(scores, c)
+        pct_rank = max(1, round(rank / n * 100))
+        rank_line = (
+            f"Ranks #{rank} of {n} alerts flagged in this scan by model confidence "
+            f"(top {pct_rank}%) — {sev} relative severity."
+        )
+        inds = a.get("risk_indicators")
+        if inds is not None:
+            a["risk_indicators"] = [rank_line] + inds
 
 
 def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
@@ -250,12 +269,12 @@ def _compute_risk_indicators(sub, comp, edge_data, sent, recv, label, amounts,
     ind: list[str] = []
     n_acct = len(comp)
 
-    # 1. Model evidence — framed as percentile, not raw probability (the raw
-    #    sigmoid is small; the defensible claim is the RANKING vs all traffic).
-    ind.append(
-        "Ranked in the top 1% of all scored transactions by the Multi-GNN — the model's "
-        "highest-confidence laundering tier, learned from confirmed laundering cases in training."
-    )
+    # NOTE: every cluster reaching this function already cleared the top-1%
+    # scoring gate in run_multignn_pipeline (ALERT_THRESHOLD_PERCENTILE), so a
+    # "top 1%" line here would be true of 100% of alerts and tell the analyst
+    # nothing about THIS cluster vs another. The alert's relative rank among
+    # today's flagged clusters is filled in by _assign_severities instead,
+    # once all clusters for the run are known.
 
     # 1b. Transaction-level flags (fire even on single-edge alerts).
     currencies = set()
