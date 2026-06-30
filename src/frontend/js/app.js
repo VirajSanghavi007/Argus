@@ -476,7 +476,7 @@ function renderDashboard() {
   document.getElementById('db-recent').innerHTML = allAlerts.slice(0,5).map(a => `
     <div class="mini-card" onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
          onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
-      <div><div class="mini-card-name">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+      <div><div class="mini-card-name">${formatPatternName(a.patternType)}</div>
       <div class="mini-card-sub">${a.sub}</div></div>
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
     </div>`).join('');
@@ -887,27 +887,11 @@ function renderRightPanel() {
   const sevColor = SEV_COLOR[a.severity]||'var(--muted)';
 
   document.getElementById('ir-pattern-sec').innerHTML = `
-    <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+    <div class="ir-pattern-name" style="color:${sevColor}">${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-      <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
-
-  // Source / signals
-  const srcEl = document.getElementById('ir-source-sec');
-  srcEl.style.display='block';
-  const sigs = a.signalsTriggered||[];
-  let srcHtml = `<span class="label-up">Detection Source</span>`;
-  if (a.source==='labelled') {
-    srcHtml += `<div class="signal-chip blue">🏷 Is Laundering label filter</div>`;
-  } else if (a.source==='both') {
-    srcHtml += `<div class="signal-chip" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)">⭐ Cross-validated by both modes</div>`;
-  } else {
-    srcHtml += sigs.map(s=>`<div class="signal-chip">${SIGNAL_ICONS[s]||'•'} ${s}</div>`).join('') ||
-      `<span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No signals recorded</span>`;
-  }
-  srcEl.innerHTML = srcHtml;
 
   // Roles
   const roleEl = document.getElementById('ir-roles-sec');
@@ -983,7 +967,6 @@ function renderCaseManager() {
       <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span></td>
       <td>${Math.round((a.confidence||0)*100)}%</td>
       <td>${a.totalMoved}</td>
-      <td><span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span></td>
       <td style="color:${decColors[dec.decision]};font-weight:600;font-family:var(--sans)">${dec.decision.toUpperCase()}</td>
       <td style="color:var(--muted);font-size:var(--text-sm)">${dec.reason||'—'}</td>
       <td><button class="btn btn-ghost" style="font-size:var(--text-xs);padding:var(--sp-1) var(--sp-2)" onclick="jumpInvestigate('${a.id}')">Re-open</button></td>
@@ -1072,11 +1055,10 @@ function runSearch(q, type='auto') {
          aria-label="${patLabel}, ${a.severity} severity"
          onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
       <div style="font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-bottom:var(--sp-2);color:var(--text)">
-        ${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}
+        ${patLabel}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
       </div>
       <div style="font-size:var(--text-sm);color:var(--muted);font-family:var(--mono);margin-bottom:var(--sp-1)">${a.sub||''}</div>
       <div style="font-size:var(--text-sm);color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
@@ -1252,18 +1234,7 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         navigateAlert(-1);
         break;
-      case 'c': // Confirm
-        e.preventDefault();
-        postDecision('confirm');
-        break;
-      case 'r': // Review
-        e.preventDefault();
-        postDecision('review');
-        break;
-      case 'd': // Dismiss
-        e.preventDefault();
-        postDecision('dismiss');
-        break;
+
       case 'arrowleft': // Prev transaction
         e.preventDefault();
         stepBy(-1);

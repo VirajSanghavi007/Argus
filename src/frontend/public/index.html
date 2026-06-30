@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=7" />
+  <link rel="stylesheet" href="/static/css/style.css?v=8" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -296,12 +296,9 @@
         <div class="ir-sec">
           <span class="label-up">Decision</span>
           <div class="dec-btns" role="group" aria-label="Decision actions">
-            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span
-                class="kbd-hint">C</span></button>
-            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span
-                class="kbd-hint">R</span></button>
-            <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span
-                class="kbd-hint">D</span></button>
+            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
+            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
+            <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
           </div>
           <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…"
             aria-label="Decision reason"></textarea>
@@ -335,7 +332,6 @@
               <th scope="col">Severity</th>
               <th scope="col">Confidence</th>
               <th scope="col">Total Moved</th>
-              <th scope="col">Source</th>
               <th scope="col">Decision</th>
               <th scope="col">Reason</th>
               <th scope="col"><span class="sr-only">Actions</span></th>
