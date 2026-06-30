@@ -93,7 +93,7 @@ def _resolve_csv() -> Path:
 # ── Graph construction ─────────────────────────────────────────────────────────
 
 def build_graph(csv_path: Path | None = None, max_rows: int | None = None,
-                return_df: bool = False) -> dict:
+                return_df: bool = False, df: "pd.DataFrame | None" = None) -> dict:
     """
     Build the transaction multigraph as a PyG-ready bundle.
 
@@ -110,15 +110,17 @@ def build_graph(csv_path: Path | None = None, max_rows: int | None = None,
     if not HAS_TORCH:
         raise RuntimeError("PyTorch not available.")
 
-    csv_path = csv_path or _resolve_csv()
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            f"Dataset not found. Checked: data/active/, data/IBM/, data/. "
-            f"Upload HI-Small_Trans.csv to one of these directories."
-        )
-
-    logger.info(f"Multi-GNN: reading {csv_path.name} (max_rows={max_rows})...")
-    df = pd.read_csv(csv_path, nrows=max_rows)
+    if df is None:
+        csv_path = csv_path or _resolve_csv()
+        if not csv_path.exists():
+            raise FileNotFoundError(
+                f"Dataset not found. Checked: data/active/, data/IBM/, data/. "
+                f"Upload HI-Small_Trans.csv to one of these directories."
+            )
+        logger.info(f"Multi-GNN: reading {csv_path.name} (max_rows={max_rows})...")
+        df = pd.read_csv(csv_path, nrows=max_rows)
+    else:
+        logger.info(f"Multi-GNN: using provided DataFrame ({len(df)} rows)...")
     df = _normalize_columns(df)
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], format="mixed")
     df.sort_values("Timestamp", inplace=True)

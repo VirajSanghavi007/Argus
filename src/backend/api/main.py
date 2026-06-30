@@ -13,7 +13,8 @@ from hashlib import md5
 from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query, Request
+import io
+from fastapi import FastAPI, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.responses import Response
@@ -815,6 +816,76 @@ def get_validation(request: Request):
     except Exception as e:
         logger.error(f"Failed to read validation data: {e}")
         raise HTTPException(status_code=500, detail="Failed to read validation data")
+
+
+# ── Custom transaction prediction (Predict tab) ──────────────────────────────
+
+@app.post("/predict")
+@limiter.limit("20/minute")
+async def predict_transactions(
+    request: Request,
+    file: UploadFile | None = File(None),
+    data: str | None = Form(None),
+):
+    """Score user-supplied transactions (CSV upload or pasted CSV/JSON) on demand."""
+    import pandas as pd
+    from ..models.multignn import load_multignn, build_graph, score_transactions
+
+    try:
+        if file:
+            content = await file.read()
+            df = pd.read_csv(io.BytesIO(content))
+        elif data:
+            try:
+                df = pd.DataFrame(json.loads(data))
+            except json.JSONDecodeError:
+                df = pd.read_csv(io.StringIO(data))
+        else:
+            raise HTTPException(status_code=400, detail="Must provide 'file' or 'data'")
+
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Provided data is empty")
+
+        required_cols = {"Timestamp", "From Bank", "Account", "To Bank", "Account.1",
+                         "Amount Paid", "Receiving Currency", "Payment Format"}
+        if not required_cols.issubset(df.columns):
+            missing = required_cols - set(df.columns)
+            raise HTTPException(status_code=400, detail=f"Missing required columns: {missing}")
+
+        if "Is Laundering" not in df.columns:
+            df["Is Laundering"] = 0
+
+        model, metrics = load_multignn()
+        if not model:
+            raise HTTPException(status_code=500, detail="Multi-GNN model is not trained or cannot be loaded.")
+
+        threshold = float(metrics.get("threshold", 0.5)) if metrics else 0.5
+        threshold = max(threshold, 0.10)
+
+        bundle = build_graph(df=df, return_df=True)
+        probs = score_transactions(model, bundle)
+
+        res_df = bundle.get("df", df)
+        if len(probs) == len(res_df):
+            res_df["ml_score"] = probs
+            res_df["flagged"] = res_df["ml_score"] >= threshold
+        else:
+            logger.warning(f"Length mismatch: {len(probs)} probs vs {len(res_df)} rows")
+            res_df["ml_score"] = 0.0
+            res_df["flagged"] = False
+
+        if pd.api.types.is_datetime64_any_dtype(res_df["Timestamp"]):
+            res_df["Timestamp"] = res_df["Timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        res_df = res_df.replace({np.nan: None})
+        records = res_df.to_dict(orient="records")
+        return JSONResponse(content={"transactions": records, "threshold": round(threshold, 4)})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── SPA fallback (must be last — catches all unmatched paths) ─────────────

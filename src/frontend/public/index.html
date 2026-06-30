@@ -125,6 +125,8 @@
         aria-controls="view-cases">Case Manager</button>
       <button class="nav-tab" onclick="showView('whitelist')" role="tab" aria-selected="false"
         aria-controls="view-whitelist">Whitelist</button>
+      <button class="nav-tab" onclick="showView('predict')" role="tab" aria-selected="false"
+        aria-controls="view-predict">Predict</button>
     </div>
     <div class="nav-status">
       <span id="nav-user"
@@ -414,6 +416,54 @@
         </table>
         <div class="cases-empty" id="suppressed-empty">No alerts suppressed — whitelist rules have not matched any
           detected clusters.</div>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW — PREDICT ═══ -->
+    <div class="view" id="view-predict" role="tabpanel" aria-labelledby="tab-predict">
+      <div class="cases-hdr">
+        <h2>Custom Transaction Prediction</h2>
+        <p style="color:var(--muted); font-size:var(--text-sm);">Upload a CSV or paste JSON/CSV to score transactions through the Multi-GNN in real time.</p>
+      </div>
+
+      <div class="wl-panel">
+        <div class="wl-panel-title">Input Transactions</div>
+
+        <div style="margin-bottom: var(--sp-4);">
+          <label class="label-up">Option 1: Upload CSV File</label>
+          <input type="file" id="predict-file" accept=".csv" style="display: block; margin-top: var(--sp-2);" />
+        </div>
+
+        <div style="margin-bottom: var(--sp-4);">
+          <label class="label-up">Option 2: Paste JSON or CSV Data</label>
+          <textarea id="predict-data" placeholder="Paste data here..." style="width: 100%; height: 150px; margin-top: var(--sp-2); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); color: var(--text); padding: var(--sp-3); font-family: var(--mono); font-size: var(--text-sm);"></textarea>
+        </div>
+
+        <button class="btn btn-blue" onclick="runPrediction()">Run Prediction</button>
+      </div>
+
+      <div class="suppressed-section" style="margin-top: var(--sp-6);">
+        <div class="suppressed-hdr">
+          <span>Prediction Results</span>
+          <span id="predict-threshold" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" aria-label="Prediction Results">
+            <thead>
+              <tr>
+                <th scope="col">Timestamp</th>
+                <th scope="col">From Bank:Account</th>
+                <th scope="col">To Bank:Account</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Format / Currency</th>
+                <th scope="col">ML Score</th>
+                <th scope="col">Flagged</th>
+              </tr>
+            </thead>
+            <tbody id="predict-tbody"></tbody>
+          </table>
+          <div class="cases-empty" id="predict-empty">No results yet. Run a prediction to see scores.</div>
+        </div>
       </div>
     </div>
 

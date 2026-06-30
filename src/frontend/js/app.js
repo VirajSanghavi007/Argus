@@ -1506,6 +1506,71 @@ async function removeWhitelistAccount(id) {
 }
 
 /* ════════════════════════════════════════════
+   PREDICT (custom transaction scoring)
+════════════════════════════════════════════ */
+async function runPrediction() {
+  const fileInput = document.getElementById('predict-file');
+  const dataInput = document.getElementById('predict-data').value.trim();
+  const tbody = document.getElementById('predict-tbody');
+  const emptyMsg = document.getElementById('predict-empty');
+  const thresholdLabel = document.getElementById('predict-threshold');
+
+  if (!fileInput.files.length && !dataInput) {
+    toast('Please upload a CSV or paste data', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  if (fileInput.files.length > 0) formData.append('file', fileInput.files[0]);
+  else if (dataInput) formData.append('data', dataInput);
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:var(--sp-4);">Running prediction model...</td></tr>';
+  emptyMsg.style.display = 'none';
+  thresholdLabel.textContent = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/predict`, {
+      method: 'POST', body: formData, credentials: API_CREDENTIALS,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Prediction failed');
+    }
+    const data = await res.json();
+    thresholdLabel.textContent = `Model Threshold: ${data.threshold}`;
+
+    if (!data.transactions || data.transactions.length === 0) {
+      tbody.innerHTML = '';
+      emptyMsg.textContent = 'No transactions processed.';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+
+    tbody.innerHTML = data.transactions.map(tx => {
+      const flagged = tx.flagged
+        ? '<span class="badge badge-red">Flagged</span>'
+        : '<span class="badge badge-green">OK</span>';
+      return `<tr>
+        <td style="font-family:var(--mono);">${tx.Timestamp || ''}</td>
+        <td>${tx['From Bank'] || ''}:${tx.Account || ''}</td>
+        <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
+        <td style="color:var(--blue);font-family:var(--mono);">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
+        <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
+        <td style="font-family:var(--mono);">${tx.ml_score != null ? Number(tx.ml_score).toFixed(4) : '0.0000'}</td>
+        <td>${flagged}</td>
+      </tr>`;
+    }).join('');
+
+    toast('Prediction complete', 'success');
+  } catch (err) {
+    tbody.innerHTML = '';
+    emptyMsg.textContent = `Error: ${err.message}`;
+    emptyMsg.style.display = 'block';
+    toast(err.message, 'error');
+  }
+}
+
+/* ════════════════════════════════════════════
    TOAST
 ════════════════════════════════════════════ */
 function toast(msg, type='info') {
