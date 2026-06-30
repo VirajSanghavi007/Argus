@@ -21,8 +21,8 @@
   --muted:   #475569;
   --light:   #94A3B8;
   /* fonts */
-  --sans: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --mono: 'DM Mono', 'Courier New', monospace;
+  --sans: 'Poppins', system-ui, sans-serif;
+  --mono: 'Poppins', system-ui, sans-serif;
   --r: 4px;
   /* type scale (4px-grid aligned) */
   --text-xs:  10px;
