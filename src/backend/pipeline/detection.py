@@ -90,9 +90,9 @@ def _classify_topology(sub: nx.DiGraph) -> str:
         return "STACK"
 
     return "RANDOM"
-# Use top-0.1% of scores as the floor — adapts to any score scale.
-# This produces ~50-300 flagged transactions regardless of model calibration.
-ALERT_THRESHOLD_PERCENTILE = 99.9
+# Use top-1% of scores as the floor — adapts to any score scale.
+# At 100k rows this flags ~1000 transactions → ~50-150 alert clusters.
+ALERT_THRESHOLD_PERCENTILE = 99
 MAX_ALERTS = 200
 
 
