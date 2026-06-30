@@ -526,6 +526,17 @@ function toggleSettings() {
   const open = p.style.display === 'block';
   p.style.display = open ? 'none' : 'block';
 }
+
+async function logout() {
+  try {
+    await apiFetch('/auth/logout', { method: 'POST',
+      headers: sessionToken ? { 'X-Session-Token': sessionToken } : {} });
+  } catch (e) { /* logout is best-effort — clear locally regardless */ }
+  localStorage.removeItem('argus-session-token');
+  sessionToken = '';
+  authUser = null;
+  window.location.reload();
+}
 document.addEventListener('click', e => {
   const btn = document.getElementById('settings-btn');
   const pop = document.getElementById('settings-popover');
