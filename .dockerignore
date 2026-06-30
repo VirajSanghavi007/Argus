@@ -1,0 +1,25 @@
+# Keep the image tiny — exclude everything heavy.
+# Datasets (4.8GB of CSVs) — NOT needed; app serves from data/pipeline_cache.json
+**/*.csv
+data/TransXion/
+data/Elliptic/
+data/EllipticPlusPlus/
+data/archive/
+data/IBM/
+data/SAML-D/
+
+# Local-only junk
+venv/
+wheels/
+node_modules/
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+logs/
+*.pptx
+*.log
+
+# IMPORTANT: do NOT exclude these — the demo needs them:
+#   data/pipeline_cache.json  data/multignn_model.pt
+#   data/multignn_meta.json   data/whitelist.json
