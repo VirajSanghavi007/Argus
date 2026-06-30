@@ -238,13 +238,13 @@ function formatPatternName(pt) {
   const map = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN',
     scatterGather:'SCATTER-GATHER', gatherScatter:'GATHER-SCATTER',
-    cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK', random:'COMPLEX FLOW',
+    cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK', random:'RANDOM',
   };
   return map[pt] || pt.toUpperCase();
 }
 const PATTERN_ICONS = {
   fanOut:'📤', fanIn:'📥', cycle:'🔄', scatterGather:'🔀',
-  gatherScatter:'⚖️', bipartite:'⚖️', stack:'📚', random:'🕸️'
+  gatherScatter:'⚖️', bipartite:'⚖️', stack:'📚', random:'❓'
 };
 
 const SIGNAL_ICONS = {
@@ -690,14 +690,7 @@ function getLayout(alert) {
     return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.5, avoidOverlap: true };
   }
 
-  // RANDOM / fallback — layered left-to-right by role (src → intermediary → dst)
-  const sources = nodes.filter(n => ['Source','Distributor'].includes(n.role)).map(n=>`#${n.id}`);
-  return {
-    name: 'breadthfirst', directed: true,
-    roots: sources.length ? sources : undefined,
-    padding: 40, spacingFactor: 1.8, avoidOverlap: true,
-    grid: false,
-  };
+  return { name: 'cose', padding: 30, animate: false, nodeRepulsion: 4500 };
 }
 function renderGraph() {
   if (!currentAlert) return;
