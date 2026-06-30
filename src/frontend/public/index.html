@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=8" />
+  <link rel="stylesheet" href="/static/css/style.css?v=9" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -156,8 +156,12 @@
               <span id="dark-toggle-label">Light</span>
             </button>
           </div>
-          <!-- Help & Guide -->
-          <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+          <!-- Help & Guide / Tour -->
+          <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:8px">
+            <button onclick="startTour()" aria-label="Take the guided tour" style="
+              width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+              padding:8px 12px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;
+              color:var(--text);line-height:1;transition:all .15s ease">🧭 Take a Tour</button>
             <button onclick="openHelp()" aria-label="Open help and guide" style="
               width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;
               padding:8px 12px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;
@@ -564,7 +568,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=15"></script>
+  <script src="/static/js/app.js?v=16"></script>
 </body>
 
 </html>

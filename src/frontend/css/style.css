@@ -718,3 +718,31 @@ input,textarea,select{
   margin-top:12px;font-family:var(--mono);font-size:10px;
   color:#334155;text-align:center;letter-spacing:.04em;
 }
+
+/* ════════════════════════════════════════════
+   GUIDED TOUR
+════════════════════════════════════════════ */
+#tour-highlight{
+  position:fixed;z-index:10050;border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(15,23,42,.62), 0 0 0 3px var(--blue);
+  transition:all .28s cubic-bezier(.4,0,.2,1);
+}
+#tour-tip{
+  position:fixed;z-index:10051;max-width:330px;width:max-content;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 16px 48px rgba(0,0,0,.35);padding:18px 20px;
+  font-family:var(--sans);transition:all .28s cubic-bezier(.4,0,.2,1);
+}
+#tour-tip .tour-step{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--blue);margin-bottom:6px;}
+#tour-tip h4{margin:0 0 6px;font-size:16px;font-weight:800;color:var(--text);}
+#tour-tip p{margin:0;font-size:13px;line-height:1.55;color:var(--muted);}
+#tour-tip .tour-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px;}
+#tour-tip .tour-dots{display:flex;gap:5px;}
+#tour-tip .tour-dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
+#tour-tip .tour-dot.on{background:var(--blue);}
+#tour-tip .tour-btns{display:flex;gap:6px;}
+#tour-tip button{font-family:var(--sans);font-size:12px;font-weight:600;border-radius:6px;
+  padding:6px 12px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);}
+#tour-tip button.tour-primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+#tour-tip button.tour-skip{background:none;border:none;color:var(--muted);padding:6px 4px;}
