@@ -8,7 +8,7 @@ document.title = 'AML Intelligence Platform';
 ════════════════════════════════════════════ */
 let authUser = null;
 
-async function authStep1() {
+function authStep1() {
   const companyId = document.getElementById('auth-company-id').value.trim();
   const name      = document.getElementById('auth-name').value.trim();
   const password  = document.getElementById('auth-password').value;
@@ -17,29 +17,13 @@ async function authStep1() {
     showAuthError('auth-error', 'All fields are required');
     return;
   }
-
-  const btn = document.querySelector('#auth-screen button');
-  if (btn) btn.disabled = true;
-
-  try {
-    const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company_id: companyId, username: name, password }),
-    });
-    if (!res.ok) {
-      showAuthError('auth-error', 'Invalid credentials');
-      return;
-    }
-    const data = await res.json();
-    sessionStorage.setItem('session_token', data.token);
-    authUser = { companyId: data.company_id, name: data.username, token: data.token };
-    completeAuth();
-  } catch (e) {
-    showAuthError('auth-error', 'Connection error — try again');
-  } finally {
-    if (btn) btn.disabled = false;
+  if (password.length < 4) {
+    showAuthError('auth-error', 'Invalid credentials');
+    return;
   }
+
+  authUser = { companyId, name };
+  completeAuth();
 }
 
 function showAuthError(id, msg) {
@@ -91,10 +75,10 @@ function playCinematicIntro() {
         const q = particles[j];
         const dx = p.x - q.x, dy = p.y - q.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
+                if (dist < 120) {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
-          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.08})`;
+          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.12})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
@@ -129,14 +113,14 @@ function playCinematicIntro() {
     shield.style.opacity = '1'; shield.style.transform = 'scale(1)';
   }, 150);
 
-  // Red-blue line extends
-  setTimeout(() => { line.style.width = '280px'; }, 400);
-
   // Bank name types in
   setTimeout(() => {
     name.style.transition = 'opacity .3s ease, transform .3s ease';
     name.style.opacity = '1'; name.style.transform = 'translateY(0)';
-  }, 500);
+  }, 400);
+
+  // Red-blue line extends
+  setTimeout(() => { line.style.width = '280px'; }, 500);
 
   // Sub text
   setTimeout(() => {
@@ -249,14 +233,6 @@ const API_BASE = (window.location.protocol === 'file:')
   ? 'http://localhost:8000'
   : '';
 
-function apiFetch(url, opts = {}) {
-  const token = (authUser && authUser.token) || sessionStorage.getItem('session_token');
-  if (token) {
-    opts.headers = { ...(opts.headers || {}), 'X-Session-Token': token };
-  }
-  return fetch(url, opts);
-}
-
 /* ── Pattern formatting ── */
 function formatPatternName(pt) {
   const map = {
@@ -342,7 +318,7 @@ async function pollUntilReady() {
   const statusLabel = document.getElementById('status-label');
   while (true) {
     try {
-      const r = await apiFetch(`${API_BASE}/status`).catch(() => null);
+      const r = await fetch(`${API_BASE}/status`).catch(() => null);
       if (r && r.ok) {
         const d = await r.json();
         setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
@@ -367,7 +343,7 @@ async function pollUntilReady() {
 }
 
 async function loadAllAlerts() {
-  const r = await apiFetch(`${API_BASE}/alerts`);
+  const r = await fetch(`${API_BASE}/alerts`);
   allAlerts = await r.json();
   await loadDecisions();
 }
@@ -375,7 +351,7 @@ async function loadAllAlerts() {
 // Hydrate analyst decisions from the persistent audit log so they survive restarts.
 async function loadDecisions() {
   try {
-    const r = await apiFetch(`${API_BASE}/decisions`);
+    const r = await fetch(`${API_BASE}/decisions`);
     if (r.ok) decisions = await r.json();
   } catch (e) { /* non-fatal — decisions stay empty */ }
 }
@@ -526,28 +502,16 @@ function fmtMoney(n) {
 /* ════════════════════════════════════════════
    INVESTIGATE SIDEBAR
 ════════════════════════════════════════════ */
-function setSrc(v,el) {
-  srcFilter=v;
-  document.querySelectorAll('#src-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-function setSev(v,el) {
-  sevFilter=v.toLowerCase();
-  document.querySelectorAll('#sev-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-
 function renderSidebar() {
   const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
+  const patFilter = document.getElementById('inv-pattern-filter')?.value || 'all';
+  const prioFilter = document.getElementById('inv-priority-filter')?.value || 'all';
+
   const filtered = allAlerts.filter(a => {
-    if (srcFilter!=='all' && a.source!==srcFilter) return false;
-    if (sevFilter!=='all' && a.severity!==sevFilter) return false;
-    if (q) {
-      const banks = (a.nodes||[]).map(n=>getBankName(n.bank)||n.bank||'').join(' ').toLowerCase();
-      const ids   = (a.nodes||[]).map(n=>n.id||'').join(' ').toLowerCase();
-      if (!formatPatternName(a.patternType).toLowerCase().includes(q) &&
-          !a.id.toLowerCase().includes(q) && !banks.includes(q) && !ids.includes(q)) return false;
-    }
+    if (patFilter !== 'all' && a.patternType !== patFilter) return false;
+    if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
+    if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
+             !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
     return true;
   });
   const el = document.getElementById('alert-list');
@@ -557,17 +521,35 @@ function renderSidebar() {
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
+    const conf   = Math.round((a.confidence||0)*100);
+    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
       ${decDot}
-      <div class="ac-name">${formatPatternName(a.patternType)}</div>
-      <div class="ac-badges">
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity.toUpperCase()}</span>
-        <span class="badge badge-mono">${a.node_count}n · ${a.txn_count}tx</span>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
+        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${a.id.toUpperCase().replace('_', '-')}</div>
+        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
       </div>
-      <div class="ac-banks">${(a.nodes||[]).slice(0,2).map(n=>getBankName(n.bank)||n.bank).filter(Boolean).join(' → ')}</div>
-      <div class="ac-meta">${a.totalMoved} · ${(a.timeSpan||'').split(' ')[0]}</div>
+      
+      <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--sp-3)">
+        ${formatPatternName(a.patternType)}
+      </div>
+      
+      <div style="display:flex; gap:var(--sp-4); margin-bottom:var(--sp-2); font-family:var(--mono);">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Amount</span>
+          <span style="font-size:var(--text-base); font-weight:700; color:var(--blue);">${a.totalMoved}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Time</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${(a.timeSpan || '').split(' ')[0]}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Hops</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${a.hops}</span>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -578,7 +560,7 @@ function renderSidebar() {
 async function loadAlertById(id) {
   if (!alertDetails[id]) {
     try {
-      const r = await apiFetch(`${API_BASE}/alerts/${id}`);
+      const r = await fetch(`${API_BASE}/alerts/${id}`);
       if (!r.ok) return;
       alertDetails[id] = await r.json();
       renderDashboard();
@@ -587,8 +569,8 @@ async function loadAlertById(id) {
   currentAlert = alertDetails[id];
   currentStep  = -1;
   if (playTimer) { clearInterval(playTimer); playTimer=null; }
-  document.getElementById('play-btn').textContent = '▶ Play';
-
+  const playBtn = document.getElementById('play-btn');
+  if (playBtn) playBtn.textContent = '▶ Play';
   document.querySelectorAll('.ac').forEach(c=>c.classList.remove('active'));
   const card = document.getElementById('ac_'+id);
   if (card) { card.classList.add('active'); card.scrollIntoView({block:'nearest'}); }
@@ -604,7 +586,6 @@ async function loadAlertById(id) {
   document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
   document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
   document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = currentAlert.confidence != null ? `${Math.round(currentAlert.confidence*100)}%` : '—';
   document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
 
   renderGraph();
@@ -621,20 +602,6 @@ const SEV_NODE = {
   medium: { bg:'#FFFBEB', border:'#D97706' },
   low:    { bg:'#ECFDF5', border:'#059669' },
 };
-const ROLE_NODE = {
-  source:      { bg:'#EFF6FF', border:'#2563EB', text:'#1D4ED8' },
-  distributor: { bg:'#EFF6FF', border:'#2563EB', text:'#1D4ED8' },
-  coordinator: { bg:'#F5F3FF', border:'#7C3AED', text:'#6D28D9' },
-  hub:         { bg:'#F5F3FF', border:'#7C3AED', text:'#6D28D9' },
-  destination: { bg:'#FEF2F2', border:'#DC2626', text:'#B91C1C' },
-  collector:   { bg:'#FEF2F2', border:'#DC2626', text:'#B91C1C' },
-  intermediary:{ bg:'#FFFBEB', border:'#D97706', text:'#92400E' },
-  default:     { bg:'#F8FAFC', border:'#64748B', text:'#334155' },
-};
-function roleColors(role) {
-  const r = (role||'').toLowerCase();
-  return ROLE_NODE[r] || ROLE_NODE.default;
-}
 const FMT_EDGE = { RTGS:'#00579C', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
 
 function getImportanceColor(importance) {
@@ -681,222 +648,164 @@ function getBankName(raw) {
 }
 
 function getLayout(alert) {
-  if (!alert) return { name:'cose', padding:40, animate:true, animationDuration:400, nodeRepulsion:8000, idealEdgeLength:120 };
+  if (!alert) return { name:'cose', padding:30, animate:false };
   const pt    = alert.patternType;
   const nodes = alert.nodes || [];
-  const n     = nodes.length;
 
-  if (pt === 'fanOut' || pt === 'fanIn') {
-    const roots = nodes
-      .filter(nd => nd.role === 'Distributor' || nd.role === 'Source' || nd.role === 'Hub')
-      .map(nd => `#${nd.id}`);
+  if (pt === 'fanOut') {
+    const dist = nodes.find(n => n.role === 'Distributor') || nodes[0];
     return {
       name: 'breadthfirst', directed: true,
-      roots: roots.length ? roots : undefined,
-      padding: 50, spacingFactor: n > 8 ? 1.6 : 2.2,
-      avoidOverlap: true, animate: true, animationDuration: 400,
+      roots: dist ? [`#${dist.id}`] : undefined,
+      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+    };
+  }
+
+  if (pt === 'fanIn') {
+    return {
+      name: 'breadthfirst', directed: false,
+      padding: 40, spacingFactor: 2.0, avoidOverlap: true
     };
   }
 
   if (pt === 'cycle') {
-    return { name: 'circle', padding: 50, spacingFactor: 1.5, avoidOverlap: true, animate: true, animationDuration: 400 };
+    return { name: 'circle', padding: 30, spacingFactor: 1.3, avoidOverlap: true };
   }
 
   if (pt === 'bipartite') {
+    const coords  = nodes.filter(n => n.role === 'Coordinator');
+    const root = coords.length ? coords.map(n => `#${n.id}`) : undefined;
     return {
       name: 'breadthfirst', directed: true,
-      padding: 50, spacingFactor: 1.8, avoidOverlap: true,
-      animate: true, animationDuration: 400,
-      grid: true,
+      roots: root,
+      padding: 40, spacingFactor: 1.8, avoidOverlap: true
     };
   }
 
   if (pt === 'scatterGather' || pt === 'gatherScatter') {
-    const roots = nodes
-      .filter(nd => nd.role === 'Source' || nd.role === 'Distributor')
-      .map(nd => `#${nd.id}`);
-    return {
-      name: 'breadthfirst', directed: true,
-      roots: roots.length ? roots : undefined,
-      padding: 50, spacingFactor: 1.9, avoidOverlap: true,
-      animate: true, animationDuration: 400,
-    };
+    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.8, avoidOverlap: true };
   }
 
   if (pt === 'stack') {
-    return {
-      name: 'breadthfirst', directed: true,
-      padding: 50, spacingFactor: 1.6, avoidOverlap: true,
-      animate: true, animationDuration: 400,
-    };
+    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.5, avoidOverlap: true };
   }
 
-  return {
-    name: 'cose', padding: 40, animate: true, animationDuration: 500,
-    nodeRepulsion: 9000, idealEdgeLength: 130, nodeOverlap: 20,
-    gravity: 0.25, numIter: 1000, initialTemp: 200,
-  };
+  return { name: 'cose', padding: 30, animate: false, nodeRepulsion: 4500 };
 }
 function renderGraph() {
   if (!currentAlert) return;
   if (cy) cy.destroy();
 
-  const isDark = document.body.classList.contains('dark');
-  const bgColor = isDark ? '#0F172A' : '#F8FAFC';
-  const textColor = isDark ? '#E2E8F0' : '#0F172A';
-  const mutedColor = isDark ? '#94A3B8' : '#64748B';
-
   const elements = [];
-
-  // Node label: short role badge + bank ID
-  let iIdx = 0;
-  currentAlert.nodes.forEach(n => {
+  // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
+  let intermediaryIdx = 0;
+  const intermediaryNodes = currentAlert.nodes.filter(n => {
     const r = (n.role||'').toLowerCase();
-    const rc = roleColors(r);
-    let badge;
-    if (r === 'source' || r === 'distributor')      badge = 'SRC';
-    else if (r === 'destination' || r === 'collector') badge = 'DST';
-    else if (r === 'hub' || r === 'coordinator')    badge = 'HUB';
-    else { badge = `I${iIdx}`; iIdx++; }
+    return r !== 'source' && r !== 'destination';
+  });
+  const needsNumbering = intermediaryNodes.length > 1;
 
-    const bankShort = getBankName(n.bank) || n.bank || n.id;
-    const displayBank = bankShort.length > 14 ? bankShort.slice(0,13)+'…' : bankShort;
-
-    elements.push({ data:{
-      id: n.id, badge, bankLabel: displayBank,
-      sev: n.sev, role: n.role, bank: n.bank, vol: n.vol, txn: n.txn,
-      _bg: rc.bg, _border: rc.border, _text: rc.text,
+  currentAlert.nodes.forEach(n => {
+    const c = SEV_NODE[n.sev]||SEV_NODE.low;
+    const r = (n.role||'').toLowerCase();
+    let shortLabel;
+    if (r === 'source') {
+      shortLabel = 'S';
+    } else if (r === 'destination') {
+      shortLabel = 'D';
+    } else {
+      // intermediary, distributor, coordinator, hub, etc.
+      shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
+      intermediaryIdx++;
+    }
+    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
+      bank:n.bank, vol:n.vol, txn:n.txn, 'background-color':c.bg, 'border-color':c.border 
     }});
   });
-
-  // Edges — label with amount if available
   currentAlert.edges.forEach(e => {
-    const tx = (currentAlert.transactions[e.txIdx]||{});
-    const importance = e.importance ?? 0.5;
-    const edgeLabel = tx.amount ? `$${Number(tx.amount).toLocaleString('en-US',{maximumFractionDigits:0})}` : (e.label||'');
-    elements.push({ data:{
-      id: e.id, source: e.source, target: e.target,
-      label: edgeLabel, txIdx: e.txIdx, fmt: tx.fmt||'', importance,
-    }});
+    const fmt = (currentAlert.transactions[e.txIdx]||{}).fmt||'';
+    const importance = e.importance || 0.5;
+    elements.push({ data:{ id:e.id, source:e.source, target:e.target,
+      label:e.label, txIdx:e.txIdx, fmt, importance } });
   });
 
   cy = cytoscape({
     container: document.getElementById('cy'),
     elements,
-    style: [
-      {
-        selector: 'node',
-        style: {
-          'width': 56, 'height': 56,
-          'background-color': ele => ele.data('_bg'),
-          'border-color':     ele => ele.data('_border'),
-          'border-width': 2.5,
-          'label': ele => `${ele.data('badge')}\n${ele.data('bankLabel')}`,
-          'text-valign': 'center', 'text-halign': 'center',
-          'color': ele => ele.data('_text'),
-          'font-size': 8, 'font-family': 'Poppins, system-ui, sans-serif',
-          'font-weight': 600,
-          'text-wrap': 'wrap', 'text-max-width': 52,
-          'text-margin-y': 0,
-          'shadow-blur': 8, 'shadow-color': 'rgba(0,0,0,0.12)', 'shadow-offset-x': 0, 'shadow-offset-y': 2,
-        }
-      },
-      {
-        selector: 'node[sev="high"]',
-        style: { 'border-width': 3, 'border-color': '#DC2626', 'background-color': '#FEF2F2' }
-      },
-      {
-        selector: 'edge',
-        style: {
-          'curve-style': 'bezier',
-          'target-arrow-shape': 'triangle',
-          'target-arrow-color': ele => getImportanceColor(ele.data('importance')),
-          'line-color':         ele => getImportanceColor(ele.data('importance')),
-          'width':              ele => 1.5 + (ele.data('importance') || 0.5) * 2.5,
-          'arrow-scale': 1.3,
-          'label': 'data(label)',
-          'font-size': 7, 'font-family': 'Poppins, system-ui, sans-serif',
-          'color': mutedColor,
-          'text-background-color': isDark ? '#1E293B' : '#FFFFFF',
-          'text-background-opacity': 0.85,
-          'text-background-padding': '3px',
-          'text-background-shape': 'roundrectangle',
-          'text-border-opacity': 0.6,
-          'text-border-width': 0.5,
-          'text-border-color': isDark ? '#334155' : '#E2E8F0',
-          'edge-text-rotation': 'autorotate',
-          'source-distance-from-node': 4,
-          'target-distance-from-node': 4,
-        }
-      },
-      { selector: '.hl-node', style: { 'border-width': 4, 'border-color': '#00579C', 'shadow-blur': 16, 'shadow-color': 'rgba(0,87,156,0.4)' } },
-      { selector: '.hl-edge', style: { 'line-color': '#00579C', 'target-arrow-color': '#00579C', 'width': 3.5 } },
-      { selector: '.dim', style: { 'opacity': 0.12 } },
-      { selector: '.tl-active', style: { 'line-color': '#F97316', 'target-arrow-color': '#F97316', 'width': 4, 'z-index': 10 } },
+    style:[
+      { selector:'node', style:{
+        'background-color':'data(background-color)',
+        'border-color':'data(border-color)',
+        'border-width':2, 'color':'#0F172A',
+        'font-size':9, 'font-family':'Poppins, sans-serif',
+        'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
+      }},
+      { selector:'edge', style:{
+        'line-color': e => getImportanceColor(e.data('importance')),
+        'target-arrow-color': e => getImportanceColor(e.data('importance')),
+        'target-arrow-shape':'triangle', 'curve-style':'bezier',
+        'width': e => 1.5 + (e.data('importance')||0.5) * 2,
+        'font-size':8, 'color':'#475569',
+        'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
+        'text-background-opacity':.9,
+        'text-background-padding':2,
+      }},
+      { selector:'node', style:{
+        'background-color': ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).bg,
+        'border-color':     ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).border,
+      }},
+      { selector:'.hl-edge', style:{ 'line-color':'#00579C','target-arrow-color':'#00579C','width':3 } },
+      { selector:'.dim', style:{ opacity:0.15 } },
     ],
     layout: getLayout(currentAlert),
-    userZoomingEnabled: true, userPanningEnabled: true,
-    boxSelectionEnabled: false,
+    userZoomingEnabled:true, userPanningEnabled:true,
   });
 
-  // After layout, auto-fit with padding
-  cy.ready(() => cy.fit(cy.elements(), 50));
-
-  // Tooltip on hover
-  const showTT = (x, y, lines) => {
-    const tt = document.getElementById('tooltip');
-    tt.style.left = x + 'px'; tt.style.top = y + 'px'; tt.style.display = 'block';
-    const [id, bank, role, vol, txn] = lines;
-    document.getElementById('tt-id').textContent   = id   || '';
-    document.getElementById('tt-bank').textContent = bank || '—';
-    document.getElementById('tt-role').textContent = role || '—';
-    document.getElementById('tt-vol').textContent  = vol  || '—';
-    document.getElementById('tt-txn').textContent  = txn  || '—';
-  };
-  const hideTT = () => document.getElementById('tooltip').style.display = 'none';
-  const rendPos = (e) => {
+  cy.on('mouseover','node', e => {
+    const n = e.target.data();
     const pos = e.renderedPosition;
     const box = document.getElementById('cy').getBoundingClientRect();
-    return [box.left + pos.x + 18, box.top + pos.y - 10];
-  };
-
-  cy.on('mouseover', 'node', e => {
-    const [x, y] = rendPos(e); const d = e.target.data();
-    showTT(x, y, [d.id, getBankName(d.bank)||d.bank, d.role, d.vol, d.txn]);
+    const tt  = document.getElementById('tooltip');
+    tt.style.left = (box.left+pos.x+16)+'px';
+    tt.style.top  = (box.top+pos.y-20)+'px';
+    tt.style.display='block';
+    document.getElementById('tt-id').textContent   = n.id;
+    document.getElementById('tt-bank').textContent = getBankName(n.bank)||'—';
+    document.getElementById('tt-role').textContent = n.role||'—';
+    document.getElementById('tt-vol').textContent  = n.vol||'—';
+    document.getElementById('tt-txn').textContent  = n.txn||'—';
   });
-  cy.on('mouseout', 'node', hideTT);
-
-  cy.on('mouseover', 'edge', e => {
-    const [x, y] = rendPos(e); const d = e.target.data();
-    const tx = (currentAlert.transactions[d.txIdx]||{});
-    showTT(x, y, [`${d.source} → ${d.target}`, d.fmt||'—', `Importance: ${Math.round((d.importance||0.5)*100)}%`, tx.amount ? `$${Number(tx.amount).toLocaleString()}` : '—', '—']);
+  cy.on('mouseout','node', () => document.getElementById('tooltip').style.display='none');
+  cy.on('mouseover','edge', e => {
+    const edgeData = e.target.data();
+    const pos = e.renderedPosition;
+    const box = document.getElementById('cy').getBoundingClientRect();
+    const tt  = document.getElementById('tooltip');
+    tt.style.left = (box.left+pos.x+16)+'px';
+    tt.style.top  = (box.top+pos.y-20)+'px';
+    tt.style.display='block';
+    document.getElementById('tt-id').textContent   = `${edgeData.source} → ${edgeData.target}`;
+    document.getElementById('tt-bank').textContent = edgeData.label||'—';
+    document.getElementById('tt-role').textContent = `Importance: ${Math.round(edgeData.importance * 100)}%`;
+    document.getElementById('tt-vol').textContent  = '—';
+    document.getElementById('tt-txn').textContent  = '—';
   });
-  cy.on('mouseout', 'edge', hideTT);
-
-  cy.on('tap', 'node', e => highlightNode(e.target.id()));
-  cy.on('tap', 'core', e => { if (e.target === cy) resetHighlight(); });
+  cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
+  cy.on('tap','node', e => highlightNode(e.target.id()));
 }
 
 function highlightNode(id) {
   if (!cy) return;
   resetHighlight();
-  const node = cy.nodes(`[id="${id}"]`);
-  const connected = node.connectedEdges();
-  node.addClass('hl-node');
-  connected.addClass('hl-edge');
-  cy.elements().not(node).not(connected).addClass('dim');
+  cy.nodes(`[id="${id}"]`).style({'border-width':4});
+  cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
 }
 function resetHighlight() {
   if (!cy) return;
-  cy.elements().removeClass('dim hl-edge hl-node tl-active');
+  cy.elements().removeClass('dim hl-edge');
+  cy.nodes().style({'border-width':2});
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
-}
-function downloadPNG() {
-  if (!cy) return;
-  const a = document.createElement('a');
-  a.href = cy.png({scale:2, bg: document.body.classList.contains('dark') ? '#0D1B2A' : '#F8FAFC'});
-  a.download = `aml-${currentAlert?.id||'graph'}.png`; a.click();
 }
 
 /* ════════════════════════════════════════════
@@ -929,9 +838,9 @@ function applyStep(idx) {
       <span>${tx.ts||'—'}</span>
     </div>`;
   if (cy) {
-    cy.edges().removeClass('tl-active');
+    cy.edges().removeClass('hl-edge');
     const me = currentAlert.edges.find(e=>e.txIdx===idx);
-    if (me) cy.edges(`[id="${me.id}"]`).addClass('tl-active');
+    if (me) cy.edges(`[id="${me.id}"]`).addClass('hl-edge');
   }
   updateCounter(); renderDots();
 }
@@ -982,8 +891,6 @@ function renderRightPanel() {
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
       <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-      <span class="badge badge-light">${Math.round((a.confidence||0)*100)}% CONF</span>
-      ${a.mlScore != null ? `<span class="badge" style="background:${a.mlScore>=0.7?'var(--red-bg)':a.mlScore>=0.4?'var(--amber-bg)':'var(--green-bg)'};color:${a.mlScore>=0.7?'var(--red)':a.mlScore>=0.4?'var(--amber)':'var(--green)'};border:1px solid ${a.mlScore>=0.7?'var(--red-bd)':a.mlScore>=0.4?'var(--amber-bd)':'var(--green-bd)'}">🤖 ML ${Math.round(a.mlScore*100)}%</span>` : ''}
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
 
@@ -1035,7 +942,7 @@ async function postDecision(decision) {
   if (!currentAlert) return;
   const reason = document.getElementById('dec-reason').value||'';
   try {
-    const r = await apiFetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
+    const r = await fetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({decision,reason})
     });
@@ -1159,9 +1066,6 @@ function runSearch(q, type='auto') {
   const cards = res.map(a => {
     const patLabel = a.name || formatPatternName(a.patternType);
     const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
-    const mlBg  = mlPct != null ? (mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)') : '';
-    const mlClr = mlPct != null ? (mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)') : '';
-    const mlBd  = mlPct != null ? (mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)') : '';
     return `
     <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
          onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
@@ -1173,7 +1077,6 @@ function runSearch(q, type='auto') {
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlPct!=null?`<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>`:''}
       </div>
       <div style="font-size:var(--text-sm);color:var(--muted);font-family:var(--mono);margin-bottom:var(--sp-1)">${a.sub||''}</div>
       <div style="font-size:var(--text-sm);color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
@@ -1188,7 +1091,7 @@ function runSearch(q, type='auto') {
 ════════════════════════════════════════════ */
 async function loadValidation() {
   try {
-    const r=await apiFetch(`${API_BASE}/validation`);
+    const r=await fetch(`${API_BASE}/validation`);
     if (!r.ok) {
       document.getElementById('val-compare-body').innerHTML=
         `<tr><td colspan="5" style="color:var(--red);padding:var(--sp-4)">Run validator.py first to generate validation data.</td></tr>`;
@@ -1293,7 +1196,7 @@ async function addWhitelistAccount() {
   if (!id) { toast('Enter an account ID','warning'); return; }
   const reason=(document.getElementById('wl-reason-inp').value||'').trim();
   try {
-    const r=await apiFetch(`${API_BASE}/whitelist/account`,{
+    const r=await fetch(`${API_BASE}/whitelist/account`,{
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({account_id:id,reason})
     });
@@ -1307,7 +1210,7 @@ async function addWhitelistAccount() {
 
 async function removeWhitelistAccount(id) {
   try {
-    await apiFetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
+    await fetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
     await loadWhitelist();
     toast(`Removed ${id} from whitelist`,'success');
   } catch(e){ toast('Error removing from whitelist','error'); }
@@ -1330,20 +1233,49 @@ function toast(msg, type='info') {
   setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },3000);
 }
 
-
+/* ════════════════════════════════════════════
+   KEYBOARD SHORTCUTS (Investigate view)
+════════════════════════════════════════════ */
 document.addEventListener('keydown', e => {
+  // Don't fire shortcuts when typing in inputs
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
   const investigateActive = document.getElementById('view-investigate')?.classList.contains('active');
+
   if (investigateActive && currentAlert) {
     switch(e.key.toLowerCase()) {
-      case 'c': e.preventDefault(); postDecision('confirm'); break;
-      case 'r': e.preventDefault(); postDecision('review'); break;
-      case 'd': e.preventDefault(); postDecision('dismiss'); break;
-      case 'j': e.preventDefault(); navigateAlert(1); break;
-      case 'k': e.preventDefault(); navigateAlert(-1); break;
-      case 'arrowleft': e.preventDefault(); stepBy(-1); break;
-      case 'arrowright': e.preventDefault(); stepBy(1); break;
-      case ' ': e.preventDefault(); tlPlay(); break;
+      case 'j': // Next alert
+        e.preventDefault();
+        navigateAlert(1);
+        break;
+      case 'k': // Previous alert
+        e.preventDefault();
+        navigateAlert(-1);
+        break;
+      case 'c': // Confirm
+        e.preventDefault();
+        postDecision('confirm');
+        break;
+      case 'r': // Review
+        e.preventDefault();
+        postDecision('review');
+        break;
+      case 'd': // Dismiss
+        e.preventDefault();
+        postDecision('dismiss');
+        break;
+      case 'arrowleft': // Prev transaction
+        e.preventDefault();
+        stepBy(-1);
+        break;
+      case 'arrowright': // Next transaction
+        e.preventDefault();
+        stepBy(1);
+        break;
+      case ' ': // Play/pause timeline
+        e.preventDefault();
+        tlPlay();
+        break;
     }
   }
 });

@@ -1,312 +1,435 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>AML Intelligence Platform</title>
-<link rel="stylesheet" href="/static/lib/fonts.css"/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/style.css?v=7"/>
-<script src="/static/lib/cytoscape.min.js"></script>
-<script src="/static/lib/chart.umd.min.js"></script>
-<style>nav, main, #tooltip, #toasts { display: none !important; }</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>AML Intelligence Platform</title>
+  <link rel="stylesheet" href="/static/lib/fonts.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css?v=7" />
+  <script src="/static/lib/cytoscape.min.js"></script>
+  <script src="/static/lib/chart.umd.min.js"></script>
+  <style>
+    nav,
+    main,
+    #tooltip,
+    #toasts {
+      display: none !important;
+    }
+  </style>
 </head>
+
 <body>
 
-<!-- ═══ AUTH SCREEN ═══ -->
-<div id="auth-screen">
-  <div class="auth-bg-grid" aria-hidden="true"></div>
-  <div class="auth-card">
-    <div class="auth-logo">
-      <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" style="width:200px;height:auto;mix-blend-mode:multiply;"/>
-    </div>
-    <h1 class="auth-title">AML Intelligence</h1>
-    <p class="auth-subtitle">Secure Access Portal</p>
-
-    <!-- Step 1: Credentials -->
-    <form id="auth-step1" class="auth-form" onsubmit="event.preventDefault();authStep1()">
-      <div class="auth-field">
-        <label for="auth-company-id">Company ID</label>
-        <input type="text" id="auth-company-id" placeholder="e.g. UBI-AML-2026" required autocomplete="off"/>
+  <!-- ═══ AUTH SCREEN ═══ -->
+  <div id="auth-screen">
+    <div class="auth-bg-grid" aria-hidden="true"></div>
+    <div class="auth-card">
+      <div class="auth-logo">
+        <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India"
+          style="width:200px;height:auto;mix-blend-mode:multiply;" />
       </div>
-      <div class="auth-field">
-        <label for="auth-name">Officer Name</label>
-        <input type="text" id="auth-name" placeholder="Full name" required autocomplete="off"/>
+      <h1 class="auth-title">AML Intelligence</h1>
+      <p class="auth-subtitle">Secure Access Portal</p>
+
+      <!-- Step 1: Credentials -->
+      <form id="auth-step1" class="auth-form" onsubmit="event.preventDefault();authStep1()">
+        <div class="auth-field">
+          <label for="auth-company-id">Company ID</label>
+          <input type="text" id="auth-company-id" placeholder="e.g. UBI-AML-2026" required autocomplete="off" />
+        </div>
+        <div class="auth-field">
+          <label for="auth-name">Officer Name</label>
+          <input type="text" id="auth-name" placeholder="Full name" required autocomplete="off" />
+        </div>
+        <div class="auth-field">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="off" />
+        </div>
+        <button class="btn btn-blue auth-submit" type="submit">Authenticate</button>
+        <div id="auth-error" class="auth-error" style="display:none"></div>
+      </form>
+
+
+
+      <div class="auth-footer">
+        <span>🔒 256-bit TLS Encrypted</span>
+        <span>SOC 2 Compliant</span>
       </div>
-      <div class="auth-field">
-        <label for="auth-password">Password</label>
-        <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="off"/>
-      </div>
-      <button class="btn btn-blue auth-submit" type="submit">Authenticate</button>
-      <div id="auth-error" class="auth-error" style="display:none"></div>
-    </form>
-
-
-
-    <div class="auth-footer">
-      <span>🔒 256-bit TLS Encrypted</span>
-      <span>SOC 2 Compliant</span>
     </div>
   </div>
-</div>
 
-<!-- ═══ CINEMATIC INTRO ═══ -->
-<div id="cinematic-intro" style="display:none">
-  <canvas id="cine-canvas" aria-hidden="true"></canvas>
-  <div class="cine-content" id="cine-content">
-    <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" class="cine-shield" style="width:200px;height:auto;"/>
-    <div class="cine-line" id="cine-line"></div>
-    <div class="cine-bank-name" id="cine-name">Union Bank of India</div>
-    <div class="cine-bank-sub" id="cine-sub">AML Intelligence Platform</div>
-    <div class="cine-tagline" id="cine-tagline">Securing the Financial Ecosystem</div>
-  </div>
-</div>
-
-<!-- ═══ LOADING SCREEN ═══ -->
-<div id="loading-overlay" role="status" aria-label="Loading platform" style="display:none">
-  <canvas id="load-canvas" aria-hidden="true"></canvas>
-  <div class="load-inner">
-    <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" class="load-logo" style="width:200px;height:auto;"/>
-    <div class="load-title">AML Intelligence Platform</div>
-    <div class="load-sub">Initializing Secure Environment</div>
-    <div class="load-bar-wrap"><div class="load-bar" id="load-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
-    <div class="load-stages" id="load-stages">
-      <div class="load-stage" id="ls-0"><div class="load-stage-dot"></div><span class="load-stage-label">Establishing secure connection...</span></div>
-      <div class="load-stage" id="ls-1"><div class="load-stage-dot"></div><span class="load-stage-label">Loading transaction graph...</span></div>
-      <div class="load-stage" id="ls-2"><div class="load-stage-dot"></div><span class="load-stage-label">Running pattern detection engine...</span></div>
-      <div class="load-stage" id="ls-3"><div class="load-stage-dot"></div><span class="load-stage-label">Building alert index...</span></div>
-      <div class="load-stage" id="ls-4"><div class="load-stage-dot"></div><span class="load-stage-label">Environment ready</span></div>
+  <!-- ═══ CINEMATIC INTRO ═══ -->
+  <div id="cinematic-intro" style="display:none">
+    <canvas id="cine-canvas" aria-hidden="true"></canvas>
+    <div class="cine-content" id="cine-content">
+      <img src="/static/public/ubi_logo%20LOGIN.png" alt="ARGUS Logo" class="cine-shield"
+        style="width:300px;height:auto;" />
+      <div class="cine-bank-name" id="cine-name"
+        style="font-family: 'Lobster', cursive; font-weight: 400; letter-spacing: 0.05em;">Argus</div>
+      <div class="cine-line" id="cine-line"></div>
+      <div class="cine-bank-sub" id="cine-sub">AML Intelligence Platform</div>
+      <div class="cine-tagline" id="cine-tagline">Securing the Financial Ecosystem</div>
     </div>
-    <div class="load-session-info" id="load-session-info"></div>
   </div>
-</div>
 
-<!-- Navbar -->
-<nav aria-label="Main navigation">
-  <div class="nav-brand">
-    <div class="nav-title">AML Intelligence Platform</div>
-    <div class="nav-sub">FUND FLOW TRACKING SYSTEM</div>
+  <!-- ═══ LOADING SCREEN ═══ -->
+  <div id="loading-overlay" role="status" aria-label="Loading platform" style="display:none">
+    <canvas id="load-canvas" aria-hidden="true"></canvas>
+    <div class="load-inner">
+      <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" class="load-logo"
+        style="width:200px;height:auto;" />
+      <div class="load-title">AML Intelligence Platform</div>
+      <div class="load-sub">Initializing Secure Environment</div>
+      <div class="load-bar-wrap">
+        <div class="load-bar" id="load-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+        </div>
+      </div>
+      <div class="load-stages" id="load-stages">
+        <div class="load-stage" id="ls-0">
+          <div class="load-stage-dot"></div><span class="load-stage-label">Establishing secure connection...</span>
+        </div>
+        <div class="load-stage" id="ls-1">
+          <div class="load-stage-dot"></div><span class="load-stage-label">Loading transaction graph...</span>
+        </div>
+        <div class="load-stage" id="ls-2">
+          <div class="load-stage-dot"></div><span class="load-stage-label">Running pattern detection engine...</span>
+        </div>
+        <div class="load-stage" id="ls-3">
+          <div class="load-stage-dot"></div><span class="load-stage-label">Building alert index...</span>
+        </div>
+        <div class="load-stage" id="ls-4">
+          <div class="load-stage-dot"></div><span class="load-stage-label">Environment ready</span>
+        </div>
+      </div>
+      <div class="load-session-info" id="load-session-info"></div>
+    </div>
   </div>
-  <div class="nav-tabs" role="tablist" aria-label="Platform views">
-    <button class="nav-tab active" onclick="showView('dashboard')" role="tab" aria-selected="true" aria-controls="view-dashboard">Dashboard</button>
-    <button class="nav-tab" onclick="showView('investigate')" role="tab" aria-selected="false" aria-controls="view-investigate">Investigate</button>
-    <button class="nav-tab" onclick="showView('cases')" role="tab" aria-selected="false" aria-controls="view-cases">Case Manager</button>
-    <button class="nav-tab" onclick="showView('search')" role="tab" aria-selected="false" aria-controls="view-search">Search</button>
-    <button class="nav-tab" onclick="showView('whitelist')" role="tab" aria-selected="false" aria-controls="view-whitelist">Whitelist</button>
-  </div>
-  <div class="nav-status">
-    <span id="nav-user" style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:var(--muted);margin-right:var(--sp-2);display:none"></span>
-    <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode" style="
+
+  <!-- Navbar -->
+  <nav aria-label="Main navigation">
+    <div style="display: flex; align-items: center; gap: var(--sp-3);">
+      <img src="/static/public/ubi_logo%20LOGIN.png" alt="ARGUS Logo" style="height: 32px; width: auto;" />
+      <div class="nav-brand">
+        <div class="nav-title"
+          style="font-size: 2rem; font-family: 'Lobster', cursive; font-weight: 400; letter-spacing: 0.05em;">Argus
+        </div>
+      </div>
+    </div>
+    <div class="nav-tabs" role="tablist" aria-label="Platform views" style="justify-content: center;">
+      <button class="nav-tab active" onclick="showView('dashboard')" role="tab" aria-selected="true"
+        aria-controls="view-dashboard">Dashboard</button>
+      <button class="nav-tab" onclick="showView('investigate')" role="tab" aria-selected="false"
+        aria-controls="view-investigate">Investigate</button>
+      <button class="nav-tab" onclick="showView('cases')" role="tab" aria-selected="false"
+        aria-controls="view-cases">Case Manager</button>
+      <button class="nav-tab" onclick="showView('whitelist')" role="tab" aria-selected="false"
+        aria-controls="view-whitelist">Whitelist</button>
+    </div>
+    <div class="nav-status">
+      <span id="nav-user"
+        style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:var(--muted);margin-right:var(--sp-2);display:none"></span>
+      <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode" style="
       background:none;border:1px solid var(--border);border-radius:var(--r);
       padding:var(--sp-1) var(--sp-2);cursor:pointer;font-size:var(--text-base);color:var(--muted);line-height:1;
       transition:all .15s ease;flex-shrink:0">☀️</button>
-  </div>
-</nav>
+    </div>
+  </nav>
 
-<main>
+  <main>
 
-<!-- ═══ VIEW 1 — DASHBOARD ═══ -->
-<div class="view active" id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
-  <div class="db-grid-4">
-    <div class="color-card blue"><span class="label-up">Total Alerts</span><div class="card-num blue" id="st-total">—</div><div class="card-sub">Labelled + Unlabelled</div></div>
-    <div class="color-card green"><span class="label-up">Money Flagged</span><div class="card-num green" id="st-money">—</div><div class="card-sub">Across all alerts</div></div>
-    <div class="color-card red"><span class="label-up">High Severity</span><div class="card-num red" id="st-high">—</div><div class="card-sub">Requires immediate review</div></div>
-    <div class="color-card amber"><span class="label-up">Decisions Made</span><div class="card-num amber" id="st-dec">—</div><div class="card-sub">Confirmed / reviewed / dismissed</div></div>
-  </div>
-  <div class="db-grid-2">
-    <div class="db-chart-card"><h3>Pattern Breakdown</h3><div class="chart-wrap"><canvas id="chart-donut" aria-label="Donut chart showing pattern type distribution"></canvas></div></div>
-    <div class="db-chart-card"><h3>Most Involved Banks</h3><div class="chart-wrap"><canvas id="chart-banks" aria-label="Bar chart showing most involved banks"></canvas></div></div>
-  </div>
-  <div class="timeline-card">
-    <h3>Suspicious Activity Over 48-Hour Window</h3>
-    <div class="chart-wrap"><canvas id="chart-tl" aria-label="Timeline chart showing suspicious activity over 48 hours"></canvas></div>
-  </div>
-  <div class="db-bottom">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
-      <span class="label-up">Recent Alerts</span>
-      <div class="recent-list" id="db-recent" role="list" aria-label="Recent alerts"></div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
-      <span class="label-up">Decision Summary</span>
-      <table class="dec-summary-table" aria-label="Decision summary">
-        <tr><td>Confirmed</td><td><span class="dec-num" id="dc-confirm" style="color:var(--green)">0</span></td></tr>
-        <tr><td>Needs Review</td><td><span class="dec-num" id="dc-review" style="color:var(--amber)">0</span></td></tr>
-        <tr><td>Dismissed</td><td><span class="dec-num" id="dc-dismiss" style="color:var(--red)">0</span></td></tr>
-        <tr><td>Pending</td><td><span class="dec-num" id="dc-pending" style="color:var(--muted)">0</span></td></tr>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ VIEW 2 — INVESTIGATE ═══ -->
-<div class="view" id="view-investigate" role="tabpanel" aria-labelledby="tab-investigate">
-  <div class="inv-left">
-    <div class="inv-left-head">
-      <label for="inv-search" class="label-up" style="margin-bottom:var(--sp-1)">Search alerts</label>
-      <input type="search" placeholder="Search alerts…" id="inv-search" oninput="renderSidebar()" aria-label="Filter alerts by name or ID"/>
-      <div class="inv-filter-row" id="sev-pills" role="group" aria-label="Severity filter">
-        <span class="filter-pill active" onclick="setSev('all',this)" role="button" tabindex="0">All</span>
-        <span class="filter-pill" onclick="setSev('HIGH',this)" role="button" tabindex="0">High</span>
-        <span class="filter-pill" onclick="setSev('MEDIUM',this)" role="button" tabindex="0">Medium</span>
-        <span class="filter-pill" onclick="setSev('LOW',this)" role="button" tabindex="0">Low</span>
-      </div>
-    </div>
-    <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
-  </div>
-
-  <div class="inv-center">
-    <div class="route-bar" id="route-bar" aria-label="Transaction route"><span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert to begin investigation</span></div>
-    <div class="inv-stats-strip" aria-label="Alert statistics">
-      <div class="inv-stat"><div class="is-label">Total Moved</div><div class="is-val" id="is-moved">—</div></div>
-      <div class="inv-stat"><div class="is-label">Time Span</div><div class="is-val" id="is-span">—</div></div>
-      <div class="inv-stat"><div class="is-label">Hops</div><div class="is-val" id="is-hops">—</div></div>
-      <div class="inv-stat"><div class="is-label">Confidence</div><div class="is-val" id="is-conf">—</div></div>
-      <div class="inv-stat"><div class="is-label">Pattern</div><div class="is-val" id="is-pat">—</div></div>
-    </div>
-    <div class="graph-area">
-      <div id="cy" role="img" aria-label="Transaction network graph"></div>
-      <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
-        <button class="graph-btn" onclick="cy&&cy.fit()" aria-label="Fit graph to view">Fit</button>
-        <button class="graph-btn" onclick="downloadPNG()" aria-label="Download graph as PNG">PNG</button>
-        <button class="graph-btn" onclick="resetHighlight()" aria-label="Reset graph highlights">Reset</button>
-      </div>
-    </div>
-    <div class="inv-timeline" aria-label="Transaction timeline">
-      <div class="tl-header">
-        <span class="tl-counter" id="tl-counter">— / —</span>
-        <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev</button>
-          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play</button>
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶</button>
+    <!-- ═══ VIEW 1 — DASHBOARD ═══ -->
+    <div class="view active" id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="db-grid-4">
+        <div class="color-card blue"><span class="label-up">Total Alerts</span>
+          <div class="card-num blue" id="st-total">—</div>
+          <div class="card-sub">Labelled + Unlabelled</div>
+        </div>
+        <div class="color-card green"><span class="label-up">Money Flagged</span>
+          <div class="card-num green" id="st-money">—</div>
+          <div class="card-sub">Across all alerts</div>
+        </div>
+        <div class="color-card red"><span class="label-up">High Severity</span>
+          <div class="card-num red" id="st-high">—</div>
+          <div class="card-sub">Requires immediate review</div>
+        </div>
+        <div class="color-card amber"><span class="label-up">Decisions Made</span>
+          <div class="card-num amber" id="st-dec">—</div>
+          <div class="card-sub">Confirmed / reviewed / dismissed</div>
         </div>
       </div>
-      <div class="tl-card" id="tl-card"><span style="color:var(--light);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span></div>
-      <div class="tl-dots" id="tl-dots" role="group" aria-label="Transaction steps"></div>
-    </div>
-  </div>
-
-  <div class="inv-right">
-    <div class="ir-sec" id="ir-pattern-sec"><div style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert</div></div>
-    <div class="ir-sec" id="ir-source-sec" style="display:none"></div>
-    <div class="ir-sec" id="ir-roles-sec" style="display:none"></div>
-    <div class="ir-sec">
-      <span class="label-up">Decision</span>
-      <div class="dec-btns" role="group" aria-label="Decision actions">
-        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
-        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
-        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
+      <div class="db-grid-2">
+        <div class="db-chart-card">
+          <h3>Pattern Breakdown</h3>
+          <div class="chart-wrap"><canvas id="chart-donut"
+              aria-label="Donut chart showing pattern type distribution"></canvas></div>
+        </div>
+        <div class="db-chart-card">
+          <h3>Most Involved Banks</h3>
+          <div class="chart-wrap"><canvas id="chart-banks" aria-label="Bar chart showing most involved banks"></canvas>
+          </div>
+        </div>
       </div>
-      <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…" aria-label="Decision reason"></textarea>
-      <div id="dec-status-box" style="display:none" role="status"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ VIEW 3 — CASE MANAGER ═══ -->
-<div class="view" id="view-cases" role="tabpanel" aria-labelledby="tab-cases">
-  <div class="cases-hdr">
-    <h2>Case Manager</h2>
-    <div style="display:flex;gap:var(--sp-2);align-items:center">
-      <div class="cases-filters" id="case-filters" role="group" aria-label="Case decision filter">
-        <span class="filter-pill active" onclick="setCaseFilter('all',this)" role="button" tabindex="0">All</span>
-        <span class="filter-pill" onclick="setCaseFilter('confirm',this)" role="button" tabindex="0">Confirmed</span>
-        <span class="filter-pill" onclick="setCaseFilter('review',this)" role="button" tabindex="0">Reviewed</span>
-        <span class="filter-pill" onclick="setCaseFilter('dismiss',this)" role="button" tabindex="0">Dismissed</span>
+      <div class="timeline-card">
+        <h3>Suspicious Activity Over 48-Hour Window</h3>
+        <div class="chart-wrap"><canvas id="chart-tl"
+            aria-label="Timeline chart showing suspicious activity over 48 hours"></canvas></div>
       </div>
-      <button class="btn btn-ghost" onclick="exportCSV()" aria-label="Export cases as CSV">Export CSV</button>
+      <div class="db-bottom">
+        <div
+          style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
+          <span class="label-up">Recent Alerts</span>
+          <div class="recent-list" id="db-recent" role="list" aria-label="Recent alerts"></div>
+        </div>
+        <div
+          style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
+          <span class="label-up">Decision Summary</span>
+          <table class="dec-summary-table" aria-label="Decision summary">
+            <tr>
+              <td>Confirmed</td>
+              <td><span class="dec-num" id="dc-confirm" style="color:var(--green)">0</span></td>
+            </tr>
+            <tr>
+              <td>Needs Review</td>
+              <td><span class="dec-num" id="dc-review" style="color:var(--amber)">0</span></td>
+            </tr>
+            <tr>
+              <td>Dismissed</td>
+              <td><span class="dec-num" id="dc-dismiss" style="color:var(--red)">0</span></td>
+            </tr>
+            <tr>
+              <td>Pending</td>
+              <td><span class="dec-num" id="dc-pending" style="color:var(--muted)">0</span></td>
+            </tr>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="table-wrap">
-    <table class="data-table" aria-label="Case decisions">
-      <thead><tr><th scope="col">Alert ID</th><th scope="col">Pattern</th><th scope="col">Severity</th><th scope="col">Confidence</th><th scope="col">Total Moved</th><th scope="col">Source</th><th scope="col">Decision</th><th scope="col">Reason</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-      <tbody id="cases-tbody"></tbody>
-    </table>
-    <div class="cases-empty" id="cases-empty">No decisions made yet. Go to Investigate to review alerts.</div>
-  </div>
-</div>
 
-<!-- ═══ VIEW 4 — SEARCH ═══ -->
-<div class="view" id="view-search" role="tabpanel" aria-labelledby="tab-search">
-  <div class="search-hdr"><h2>Search Alerts</h2></div>
-  <div class="search-box">
-    <label for="search-inp" class="sr-only">Search alerts</label>
-    <input type="text" id="search-inp" placeholder="Search by account ID, bank, or pattern…" onkeydown="if(event.key==='Enter')doSearch()" aria-label="Search alerts by account, bank, or pattern"/>
-    <button class="btn btn-blue" onclick="doSearch()" aria-label="Search">Search</button>
-  </div>
-  <div class="quick-filters" role="group" aria-label="Quick pattern filters">
-    <span class="filter-pill blue-pill"   onclick="qFilter('fanOut')" role="button" tabindex="0">FAN-OUT</span>
-    <span class="filter-pill blue-pill"   onclick="qFilter('fanIn')" role="button" tabindex="0">FAN-IN</span>
-    <span class="filter-pill purple-pill" onclick="qFilter('cycle')" role="button" tabindex="0">CYCLE</span>
-    <span class="filter-pill amber-pill"  onclick="qFilter('scatterGather')" role="button" tabindex="0">SCATTER-GATHER</span>
-    <span class="filter-pill amber-pill"  onclick="qFilter('bipartite')" role="button" tabindex="0">BIPARTITE</span>
-    <span class="filter-pill red-pill"    onclick="qFilter('HIGH','sev')" role="button" tabindex="0">HIGH SEVERITY</span>
-    <span class="filter-pill"            onclick="qFilter('unlabelled','src')" role="button" tabindex="0">UNLABELLED ONLY</span>
-  </div>
-  <div class="search-results-grid" id="search-results" aria-label="Search results">
-    <div class="search-empty">Start typing to search all alerts…</div>
-  </div>
-</div>
+    <!-- ═══ VIEW 2 — INVESTIGATE ═══ -->
+    <div class="view" id="view-investigate" role="tabpanel" aria-labelledby="tab-investigate">
+      <div class="inv-left">
+        <div class="inv-left-head">
+          <label for="inv-search" class="label-up" style="margin-bottom:var(--sp-1)">Search alerts</label>
+          <input type="search" placeholder="Search alerts…" id="inv-search" oninput="renderSidebar()"
+            aria-label="Filter alerts by name or ID" />
+          <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3)">
+            <select id="inv-pattern-filter" onchange="renderSidebar()" style="flex:1" aria-label="Filter by Pattern">
+              <option value="all">All Patterns</option>
+              <option value="fanOut">Fan Out</option>
+              <option value="fanIn">Fan In</option>
+              <option value="cycle">Cycle</option>
+              <option value="scatterGather">Scatter-Gather</option>
+              <option value="gatherScatter">Gather-Scatter</option>
+              <option value="bipartite">Bipartite</option>
+              <option value="stack">Stack</option>
+              <option value="random">Random</option>
+            </select>
+            <select id="inv-priority-filter" onchange="renderSidebar()" style="flex:1" aria-label="Filter by Priority">
+              <option value="all">All Priorities</option>
+              <!-- <option value="critical">Critical</option> -->
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
+      </div>
 
-<!-- ═══ VIEW 5 — WHITELIST ═══ -->
-<div class="view" id="view-whitelist" role="tabpanel" aria-labelledby="tab-whitelist">
-  <div style="display:flex;flex-direction:column;gap:0"><h2 style="font-family:var(--sans);font-weight:700;font-size:var(--text-xl)">Whitelist / Exemption System</h2></div>
-  <div class="verdict-banner">
-    <div class="verdict-icon" aria-hidden="true">🛡️</div>
-    <div>
-      <div class="verdict-title">False Positive Reduction</div>
-      <div class="verdict-desc">Business accounts and known financial institutions are exempt from certain detection patterns to reduce false positives.
-        Fully-exempt clusters are suppressed (not deleted) and visible in the suppressed alerts table below.</div>
+      <div class="inv-center">
+        <div class="route-bar" id="route-bar" aria-label="Transaction route"><span
+            style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert to begin
+            investigation</span></div>
+        <div class="inv-stats-strip" aria-label="Alert statistics">
+          <div class="inv-stat">
+            <div class="is-label">Total Moved</div>
+            <div class="is-val" id="is-moved">—</div>
+          </div>
+          <div class="inv-stat">
+            <div class="is-label">Time Span</div>
+            <div class="is-val" id="is-span">—</div>
+          </div>
+          <div class="inv-stat">
+            <div class="is-label">Hops</div>
+            <div class="is-val" id="is-hops">—</div>
+          </div>
+          <div class="inv-stat">
+            <div class="is-label">Pattern</div>
+            <div class="is-val" id="is-pat">—</div>
+          </div>
+        </div>
+        <div class="graph-area">
+          <div id="cy" role="img" aria-label="Transaction network graph"></div>
+          <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
+            <button class="graph-btn" onclick="cy&&cy.fit()" aria-label="Fit graph to view">Fit</button>
+          </div>
+        </div>
+        <div class="inv-timeline" aria-label="Transaction timeline">
+          <div class="tl-header">
+            <span class="tl-counter" id="tl-counter">— / —</span>
+            <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
+              <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)"
+                onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev <span class="kbd-hint">←</span></button>
+
+              <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)"
+                aria-label="Next transaction">Next ▶ <span class="kbd-hint">→</span></button>
+            </div>
+          </div>
+          <div class="tl-card" id="tl-card"><span
+              style="color:var(--light);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span>
+          </div>
+          <div class="tl-dots" id="tl-dots" role="group" aria-label="Transaction steps"></div>
+        </div>
+      </div>
+
+      <div class="inv-right">
+        <div class="ir-sec" id="ir-pattern-sec">
+          <div style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">Select an alert</div>
+        </div>
+        <div class="ir-sec" id="ir-source-sec" style="display:none"></div>
+        <div class="ir-sec" id="ir-roles-sec" style="display:none"></div>
+        <div class="ir-sec">
+          <span class="label-up">Decision</span>
+          <div class="dec-btns" role="group" aria-label="Decision actions">
+            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span
+                class="kbd-hint">C</span></button>
+            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span
+                class="kbd-hint">R</span></button>
+            <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span
+                class="kbd-hint">D</span></button>
+          </div>
+          <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…"
+            aria-label="Decision reason"></textarea>
+          <div id="dec-status-box" style="display:none" role="status"></div>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="wl-grid">
-    <div class="wl-panel">
-      <div class="wl-panel-title">Current Exempt Accounts</div>
-      <div id="wl-accounts-list" role="list" aria-label="Exempt accounts"><span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No accounts explicitly whitelisted</span></div>
-      <div style="margin-top:var(--sp-4)"><div class="wl-panel-title">Exempt Banks</div><div class="wl-exempt-banks" id="wl-banks-list" role="list" aria-label="Exempt banks"></div></div>
-      <div style="margin-top:var(--sp-4)"><div class="wl-panel-title">Active Exemption Rules</div><div class="wl-rules-list" id="wl-rules-list" role="list" aria-label="Exemption rules"></div></div>
+
+    <!-- ═══ VIEW 3 — CASE MANAGER ═══ -->
+    <div class="view" id="view-cases" role="tabpanel" aria-labelledby="tab-cases">
+      <div class="cases-hdr">
+        <h2>Case Manager</h2>
+        <div style="display:flex;gap:var(--sp-2);align-items:center">
+          <div class="cases-filters" id="case-filters" role="group" aria-label="Case decision filter">
+            <span class="filter-pill active" onclick="setCaseFilter('all',this)" role="button" tabindex="0">All</span>
+            <span class="filter-pill" onclick="setCaseFilter('confirm',this)" role="button"
+              tabindex="0">Confirmed</span>
+            <span class="filter-pill" onclick="setCaseFilter('review',this)" role="button" tabindex="0">Reviewed</span>
+            <span class="filter-pill" onclick="setCaseFilter('dismiss',this)" role="button"
+              tabindex="0">Dismissed</span>
+          </div>
+          <button class="btn btn-red" onclick="exportCSV()" aria-label="Export cases as CSV">Export CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" aria-label="Case decisions">
+          <thead>
+            <tr>
+              <th scope="col">Alert ID</th>
+              <th scope="col">Pattern</th>
+              <th scope="col">Severity</th>
+              <th scope="col">Confidence</th>
+              <th scope="col">Total Moved</th>
+              <th scope="col">Source</th>
+              <th scope="col">Decision</th>
+              <th scope="col">Reason</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="cases-tbody"></tbody>
+        </table>
+        <div class="cases-empty" id="cases-empty">No decisions made yet. Go to Investigate to review alerts.</div>
+      </div>
     </div>
-    <div class="wl-panel" style="display:flex;flex-direction:column">
-      <div class="wl-panel-title">Add Account to Whitelist</div>
-      <form class="wl-form" style="flex:1" onsubmit="event.preventDefault();addWhitelistAccount()">
+
+
+    <!-- ═══ VIEW 5 — WHITELIST ═══ -->
+    <div class="view" id="view-whitelist" role="tabpanel" aria-labelledby="tab-whitelist">
+      <div style="display:flex;flex-direction:column;gap:0">
+        <h2 style="font-family:var(--sans);font-weight:700;font-size:var(--text-xl)">Whitelist / Exemption System</h2>
+      </div>
+      <div class="verdict-banner">
+        <div class="verdict-icon" aria-hidden="true">🛡️</div>
         <div>
-          <label for="wl-account-inp" class="label-up">Account ID</label>
-          <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:var(--sp-2)"/>
+          <div class="verdict-title">False Positive Reduction</div>
+          <div class="verdict-desc">Business accounts and known financial institutions are exempt from certain detection
+            patterns to reduce false positives.
+            Fully-exempt clusters are suppressed (not deleted) and visible in the suppressed alerts table below.</div>
         </div>
-        <div>
-          <label for="wl-reason-inp" class="label-up">Reason</label>
-          <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account" style="margin-top:var(--sp-2)"/>
+      </div>
+      <div class="wl-grid">
+        <div class="wl-panel">
+          <div class="wl-panel-title">Current Exempt Accounts</div>
+          <div id="wl-accounts-list" role="list" aria-label="Exempt accounts"><span
+              style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No accounts explicitly
+              whitelisted</span></div>
+          <div style="margin-top:var(--sp-4)">
+            <div class="wl-panel-title">Exempt Banks</div>
+            <div class="wl-exempt-banks" id="wl-banks-list" role="list" aria-label="Exempt banks"></div>
+          </div>
+          <div style="margin-top:var(--sp-4)">
+            <div class="wl-panel-title">Active Exemption Rules</div>
+            <div class="wl-rules-list" id="wl-rules-list" role="list" aria-label="Exemption rules"></div>
+          </div>
         </div>
-        <button class="btn btn-blue" type="submit" style="margin-top:auto">Add to Whitelist</button>
-      </form>
+        <div class="wl-panel" style="display:flex;flex-direction:column">
+          <div class="wl-panel-title">Add Account to Whitelist</div>
+          <form class="wl-form" style="flex:1" onsubmit="event.preventDefault();addWhitelistAccount()">
+            <div>
+              <label for="wl-account-inp" class="label-up">Account ID</label>
+              <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:var(--sp-2)" />
+            </div>
+            <div>
+              <label for="wl-reason-inp" class="label-up">Reason</label>
+              <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account"
+                style="margin-top:var(--sp-2)" />
+            </div>
+            <button class="btn btn-blue" type="submit" style="margin-top:auto">Add to Whitelist</button>
+          </form>
+        </div>
+      </div>
+      <div class="suppressed-section">
+        <div class="suppressed-hdr">
+          <span>Suppressed Alerts</span>
+          <span id="suppressed-count" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">0
+            alerts</span>
+        </div>
+        <table class="data-table" aria-label="Suppressed alerts">
+          <thead>
+            <tr>
+              <th scope="col">Alert ID</th>
+              <th scope="col">Pattern</th>
+              <th scope="col">Severity</th>
+              <th scope="col">Exemption Reason</th>
+              <th scope="col">Exempt Accounts</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="suppressed-tbody"></tbody>
+        </table>
+        <div class="cases-empty" id="suppressed-empty">No alerts suppressed — whitelist rules have not matched any
+          detected clusters.</div>
+      </div>
     </div>
+
+  </main>
+
+  <!-- Tooltip -->
+  <div id="tooltip" role="tooltip">
+    <div class="tt-id" id="tt-id"></div>
+    <div class="tt-row"><span>Bank</span><span id="tt-bank"></span></div>
+    <div class="tt-row"><span>Role</span><span id="tt-role"></span></div>
+    <div class="tt-row"><span>Volume</span><span id="tt-vol"></span></div>
+    <div class="tt-row"><span>Txns</span><span id="tt-txn"></span></div>
   </div>
-  <div class="suppressed-section">
-    <div class="suppressed-hdr">
-      <span>Suppressed Alerts</span>
-      <span id="suppressed-count" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">0 alerts</span>
-    </div>
-    <table class="data-table" aria-label="Suppressed alerts">
-      <thead><tr><th scope="col">Alert ID</th><th scope="col">Pattern</th><th scope="col">Severity</th><th scope="col">Exemption Reason</th><th scope="col">Exempt Accounts</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-      <tbody id="suppressed-tbody"></tbody>
-    </table>
-    <div class="cases-empty" id="suppressed-empty">No alerts suppressed — whitelist rules have not matched any detected clusters.</div>
-  </div>
-</div>
+  <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-</main>
-
-<!-- Tooltip -->
-<div id="tooltip" role="tooltip">
-  <div class="tt-id" id="tt-id"></div>
-  <div class="tt-row"><span>Bank</span><span id="tt-bank"></span></div>
-  <div class="tt-row"><span>Role</span><span id="tt-role"></span></div>
-  <div class="tt-row"><span>Volume</span><span id="tt-vol"></span></div>
-  <div class="tt-row"><span>Txns</span><span id="tt-txn"></span></div>
-</div>
-<div id="toasts" aria-live="polite" aria-label="Notifications"></div>
-
-<script src="/static/js/app.js?v=10"></script>
+  <script src="/static/js/app.js?v=9"></script>
 </body>
+
 </html>
