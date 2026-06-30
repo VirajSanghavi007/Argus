@@ -75,10 +75,10 @@ function playCinematicIntro() {
         const q = particles[j];
         const dx = p.x - q.x, dy = p.y - q.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
+                if (dist < 120) {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
-          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.08})`;
+          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.12})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }

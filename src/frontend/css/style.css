@@ -614,7 +614,7 @@ input,textarea,select{
 #cinematic-intro{
   position:fixed;inset:0;z-index:18000;
   display:flex;align-items:center;justify-content:center;
-  flex-direction:column;background:#060A12;overflow:hidden;
+  flex-direction:column;background:#FFFFFF;overflow:hidden;
 }
 #cinematic-intro canvas{
   position:absolute;inset:0;width:100%;height:100%;
@@ -630,7 +630,7 @@ input,textarea,select{
 }
 .cine-bank-name{
   font-family:var(--sans);font-weight:800;font-size:42px;
-  color:#F1F5F9;letter-spacing:.04em;text-align:center;
+  color:#0F172A;letter-spacing:.04em;text-align:center;
   opacity:0;transform:translateY(20px);
 }
 .cine-bank-sub{
