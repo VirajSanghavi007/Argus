@@ -1213,13 +1213,28 @@ function renderRightPanel() {
        </div>`
     : '';
 
+  // Cited evidence — concrete laundering red-flags computed from the actual data
+  const inds = a.riskIndicators || [];
+  const evidenceHTML = inds.length ? `
+    <div style="margin-top:var(--sp-4)">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:var(--sp-2)">Why this is flagged — evidence</div>
+      <ul style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:var(--sp-2)">
+        ${inds.map((s,i) => `
+          <li style="display:flex;gap:8px;align-items:flex-start;font-size:var(--text-sm);line-height:1.45;color:var(--text)">
+            <span style="flex-shrink:0;width:18px;height:18px;border-radius:50%;background:${i===inds.length-1&&inds.length>=4?'var(--blue)':'var(--red,#DA251C)'};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">${i===inds.length-1&&inds.length>=4?'∑':i+1}</span>
+            <span>${s}</span>
+          </li>`).join('')}
+      </ul>
+    </div>` : '';
+
   document.getElementById('ir-pattern-sec').innerHTML = `
     <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2);align-items:center">
       <span class="badge ${decBadge}">${a.severity}</span>
     </div>
     ${secHTML}
-    <div class="ir-desc" style="margin-top:var(--sp-3)">${generateHumanExplanation(a)}</div>`;
+    <div class="ir-desc" style="margin-top:var(--sp-3)">${generateHumanExplanation(a)}</div>
+    ${evidenceHTML}`;
 
   document.getElementById('ir-source-sec').style.display='none';
   document.getElementById('ir-roles-sec').style.display='none';

@@ -11,9 +11,5 @@ networkx==3.6.1
 scikit-learn==1.8.0
 psycopg2-binary
 
-# ── Optional ML deps (Predict tab + live rescore) ────────────────────────────
-# Heavy (~800MB). Uncomment + add to buildCommand only if the Render plan can
-# handle torch. The core demo works without these.
-# --extra-index-url https://download.pytorch.org/whl/cpu
-# torch==2.12.1
-# torch_geometric==2.8.0
+# ML deps (torch + torch_geometric) are installed separately by the Dockerfile
+# for Hugging Face Spaces — kept out of here so the base install stays light.

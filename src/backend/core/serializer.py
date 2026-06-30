@@ -119,6 +119,7 @@ def serialize_alerts(alert_dicts: list[dict]) -> list[dict]:
             "transactions":     transactions,
             "source":           a.get("source", "labelled"),
             "signalsTriggered": a.get("signals_triggered", []),
+            "riskIndicators":   a.get("risk_indicators", []),
         })
 
     return serialized
