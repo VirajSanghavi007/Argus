@@ -7,23 +7,49 @@ document.title = 'AML Intelligence Platform';
    AUTHENTICATION
 ════════════════════════════════════════════ */
 let authUser = null;
+let sessionToken = localStorage.getItem('argus-session-token') || '';
 
-function authStep1() {
+async function authStep1() {
   const companyId = document.getElementById('auth-company-id').value.trim();
   const name      = document.getElementById('auth-name').value.trim();
   const password  = document.getElementById('auth-password').value;
+  const submitBtn = document.querySelector('#auth-step1 .auth-submit');
 
   if (!companyId || !name || !password) {
     showAuthError('auth-error', 'All fields are required');
     return;
   }
-  if (password.length < 4) {
-    showAuthError('auth-error', 'Invalid credentials');
-    return;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Authenticating...';
   }
 
-  authUser = { companyId, name };
-  completeAuth();
+  try {
+    const r = await apiFetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId, username: name, password }),
+    });
+
+    if (!r.ok) {
+      showAuthError('auth-error', 'Invalid credentials');
+      return;
+    }
+
+    const session = await r.json();
+    sessionToken = session.token || '';
+    if (sessionToken) localStorage.setItem('argus-session-token', sessionToken);
+    authUser = { companyId: session.company_id || companyId, name: session.username || name };
+    completeAuth();
+  } catch (e) {
+    showAuthError('auth-error', 'Cannot reach authentication service');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Authenticate';
+    }
+  }
 }
 
 function showAuthError(id, msg) {
@@ -232,6 +258,40 @@ function stopLoadingAnimation() {
 const API_BASE = (window.location.protocol === 'file:')
   ? 'http://localhost:8000'
   : '';
+const API_CREDENTIALS = API_BASE ? 'include' : 'same-origin';
+
+function apiFetch(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (sessionToken) headers['X-Session-Token'] = sessionToken;
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: API_CREDENTIALS,
+  });
+}
+
+function clearAppShellGuard() {
+  for (const style of document.querySelectorAll('style')) {
+    if (style.textContent.includes('display: none !important')) style.remove();
+  }
+}
+
+function showInitError(message) {
+  clearAppShellGuard();
+  stopLoadingAnimation();
+
+  const ov = document.getElementById('loading-overlay');
+  if (ov) ov.style.display = 'none';
+
+  const main = document.querySelector('main');
+  if (main) {
+    main.innerHTML = `
+      <div style="padding:32px;max-width:720px;margin:0 auto;font-family:var(--sans)">
+        <h2 style="font-size:20px;margin-bottom:8px;color:var(--red)">Frontend could not load data</h2>
+        <p style="color:var(--muted);line-height:1.6">${message}</p>
+      </div>`;
+  }
+}
 
 /* ── Pattern formatting ── */
 function formatAlertId(id) { return (id||'').toUpperCase(); }
@@ -273,6 +333,94 @@ let sortOrder    = 'recent';
 let caseFilter   = 'all';
 let dbCharts     = {};
 
+// ── Hash indexes for O(1) account/bank lookup ──
+let accountIndex = {}; // accountId → [{alertId, role, amount, timestamp}]
+let bankIndex    = {}; // bankName  → [{alertId, accountId, role}]
+
+function buildIndexes() {
+  accountIndex = {};
+  bankIndex    = {};
+  allAlerts.forEach(a => {
+    // Index from summary route nodes (always available)
+    (a.routeNodes||[]).forEach(nodeId => {
+      if (!accountIndex[nodeId]) accountIndex[nodeId] = [];
+      accountIndex[nodeId].push({ alertId: a.id, amount: a.totalMoved, ts: a.timeSpan, pattern: a.patternType });
+    });
+    // Index from loaded details (richer: has bank + role info)
+    const det = alertDetails[a.id];
+    if (det) {
+      (det.nodes||[]).forEach(n => {
+        const bankName = getBankName(n.bank||'');
+        // Account index
+        if (!accountIndex[n.id]) accountIndex[n.id] = [];
+        const existing = accountIndex[n.id].find(e => e.alertId === a.id);
+        if (!existing) accountIndex[n.id].push({ alertId: a.id, role: n.role, amount: a.totalMoved, ts: a.timeSpan, pattern: a.patternType });
+        else existing.role = n.role;
+        // Bank index
+        if (bankName) {
+          if (!bankIndex[bankName]) bankIndex[bankName] = [];
+          bankIndex[bankName].push({ alertId: a.id, accountId: n.id, role: n.role });
+        }
+      });
+    }
+  });
+}
+
+function lookupEntity(q) {
+  if (!q || q.length < 2) return null;
+  const lq = q.toLowerCase().trim();
+  // Exact account hash lookup first (O(1))
+  const exactAcc = Object.keys(accountIndex).find(k => k.toLowerCase() === lq);
+  if (exactAcc) return { type:'account', id: exactAcc, hits: accountIndex[exactAcc] };
+  // Partial account match
+  const partAcc = Object.keys(accountIndex).filter(k => k.toLowerCase().includes(lq));
+  if (partAcc.length) return { type:'account', id: partAcc[0], hits: accountIndex[partAcc[0]], alsoMatched: partAcc.slice(1) };
+  // Exact bank hash lookup (O(1))
+  const exactBank = Object.keys(bankIndex).find(k => k.toLowerCase() === lq);
+  if (exactBank) return { type:'bank', id: exactBank, hits: bankIndex[exactBank] };
+  // Partial bank match
+  const partBank = Object.keys(bankIndex).filter(k => k.toLowerCase().includes(lq));
+  if (partBank.length) return { type:'bank', id: partBank[0], hits: bankIndex[partBank[0]], alsoMatched: partBank.slice(1) };
+  return null;
+}
+
+function renderEntityLookup() {
+  const q = (document.getElementById('entity-search-inp')?.value||'').trim();
+  const out = document.getElementById('entity-lookup-out');
+  if (!out) return;
+  if (!q || q.length < 2) { out.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">Type an account ID or bank name to search…</div>'; return; }
+  const res = lookupEntity(q);
+  if (!res) { out.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">No matches found for “${q}”</div>`; return; }
+  const typeLabel = res.type === 'account' ? '👤 Account' : '🏦 Bank';
+  const deduped = [...new Map((res.hits||[]).map(h => [h.alertId, h])).values()];
+  out.innerHTML = `
+    <div style="margin-bottom:var(--sp-3)">
+      <span style="font-family:var(--mono);font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.06em">${typeLabel}</span>
+      <div style="font-family:var(--mono);font-size:var(--text-lg);font-weight:700;color:var(--blue);margin-top:4px">${res.id}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${deduped.length} alert${deduped.length!==1?'s':''} involve this ${res.type}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
+      ${deduped.map(h => {
+        const a = allAlerts.find(x=>x.id===h.alertId);
+        const dec = decisions[h.alertId];
+        const decBadge = dec ? ({confirm:'badge-dec-confirm',review:'badge-dec-review',dismiss:'badge-dec-dismiss'}[dec.decision]||'') : '';
+        const roleTag = h.role ? `<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:var(--row-alt);color:var(--muted);text-transform:uppercase;font-family:var(--mono)">${h.role}</span>` : '';
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:var(--sp-3) var(--sp-4);cursor:pointer;display:flex;align-items:center;justify-content:space-between"
+              onclick="jumpInvestigate('${h.alertId}')" role="button" tabindex="0">
+          <div>
+            <div style="font-family:var(--mono);font-size:var(--text-sm);font-weight:700;color:var(--text)">${formatAlertId(h.alertId)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${a?formatPatternName(a.patternType):''} · ${h.amount||'?'}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${roleTag}
+            ${a?`<span class="badge ${decBadge||(SEV_BADGE[a.severity]||'badge-light')}">${a.severity}</span>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${(res.alsoMatched||[]).length ? `<div style="margin-top:var(--sp-2);font-size:10px;color:var(--muted);font-family:var(--mono)">Also matched: ${res.alsoMatched.slice(0,5).join(', ')}${res.alsoMatched.length>5?'…':''}</div>` : ''}`;
+}
+
 /* ════════════════════════════════════════════
    INIT — loading stages
 ════════════════════════════════════════════ */
@@ -295,21 +443,23 @@ function setStage(idx) {
 let activityBins = null; // {bins: [], labels: []} from backend
 
 async function init() {
-  const statusData = await pollUntilReady();
-  activityBins = statusData?.activity_bins || null;
-  await loadAllAlerts();
+  try {
+    const statusData = await pollUntilReady();
+    activityBins = statusData?.activity_bins || null;
+    await loadAllAlerts();
 
-  // Reveal nav/main hidden by inline style to prevent dashboard flash
-  const hideStyle = document.querySelector('style');
-  if (hideStyle && hideStyle.textContent.includes('display: none !important')) hideStyle.remove();
-  const ov = document.getElementById('loading-overlay');
-  ov.style.transition = 'opacity .6s ease';
-  ov.style.opacity = '0';
-  setTimeout(() => ov.style.display = 'none', 600);
-  document.getElementById('nav-user').style.display = 'none';
-  renderDashboard();
-  renderSidebar();
-  toast(`Welcome, ${authUser?.name || 'Analyst'}`, 'success');
+    clearAppShellGuard();
+    const ov = document.getElementById('loading-overlay');
+    ov.style.transition = 'opacity .6s ease';
+    ov.style.opacity = '0';
+    setTimeout(() => ov.style.display = 'none', 600);
+    document.getElementById('nav-user').style.display = 'none';
+    renderDashboard();
+    renderSidebar();
+    toast(`Welcome, ${authUser?.name || 'Analyst'}`, 'success');
+  } catch (e) {
+    showInitError(e.message || 'Unexpected initialization error.');
+  }
 }
 
 async function pollUntilReady() {
@@ -318,7 +468,7 @@ async function pollUntilReady() {
   const statusLabel = document.getElementById('status-label');
   while (true) {
     try {
-      const r = await fetch(`${API_BASE}/status`).catch(() => null);
+      const r = await apiFetch('/status').catch(() => null);
       if (r && r.ok) {
         const d = await r.json();
         setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
@@ -343,15 +493,19 @@ async function pollUntilReady() {
 }
 
 async function loadAllAlerts() {
-  const r = await fetch(`${API_BASE}/alerts`);
+  const r = await apiFetch('/alerts');
+  if (r.status === 401) throw new Error('Your login did not create a valid backend session. Try UBI-AML-2026 / admin / admin123, or check the auth service.');
+  if (!r.ok) throw new Error(`Alerts endpoint failed with HTTP ${r.status}.`);
   allAlerts = await r.json();
+  if (!Array.isArray(allAlerts)) throw new Error('Alerts endpoint returned an unexpected payload.');
+  buildIndexes();
   await loadDecisions();
 }
 
 // Hydrate analyst decisions from the persistent audit log so they survive restarts.
 async function loadDecisions() {
   try {
-    const r = await fetch(`${API_BASE}/decisions`);
+    const r = await apiFetch('/decisions');
     if (r.ok) decisions = await r.json();
   } catch (e) { /* non-fatal — decisions stay empty */ }
 }
@@ -363,10 +517,22 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 ════════════════════════════════════════════ */
 function toggleDark() {
   const dark = document.body.classList.toggle('dark');
-  document.getElementById('dark-toggle').textContent = dark ? '🌙' : '☀️';
+  const icon = document.getElementById('dark-toggle-icon');
+  if (icon) icon.textContent = dark ? '🌙' : '☀️';
   localStorage.setItem('aml-dark', dark ? '1' : '');
 }
-(function(){if(localStorage.getItem('aml-dark')){document.body.classList.add('dark');const b=document.getElementById('dark-toggle');if(b)b.textContent='🌙';}})();
+function toggleSettings() {
+  const p = document.getElementById('settings-popover');
+  if (!p) return;
+  const open = p.style.display === 'block';
+  p.style.display = open ? 'none' : 'block';
+}
+document.addEventListener('click', e => {
+  const btn = document.getElementById('settings-btn');
+  const pop = document.getElementById('settings-popover');
+  if (pop && btn && !btn.contains(e.target) && !pop.contains(e.target)) pop.style.display = 'none';
+});
+(function(){if(localStorage.getItem('aml-dark')){document.body.classList.add('dark');const icon=document.getElementById('dark-toggle-icon');if(icon)icon.textContent='🌙';}})();
 
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -377,7 +543,11 @@ function showView(name) {
   )?.classList.add('active');
 
   if (name === 'dashboard')   renderDashboard();
-  if (name === 'investigate') { renderSidebar(); if (!currentAlert && allAlerts.length) loadAlertById(allAlerts[0].id); }
+  if (name === 'investigate') {
+    renderSidebar();
+    // Do NOT auto-load an alert — show empty state so user picks from the list
+    if (!currentAlert) renderInvestigateEmpty();
+  }
   if (name === 'cases')       renderCaseManager();
   if (name === 'search')      runSearch('', 'all');
   if (name === 'validation')  loadValidation();
@@ -394,17 +564,13 @@ function renderDashboard() {
   document.getElementById('st-high').textContent  = allAlerts.filter(a=>a.severity==='HIGH').length;
   document.getElementById('st-dec').textContent   = Object.keys(decisions).length;
 
-  if (!allAlerts.length) {
-    document.getElementById('db-recent').innerHTML =
-      '<div style="text-align:center;color:var(--muted);padding:var(--sp-4);font-family:var(--sans)">' +
-      'No alerts detected. Model may need retraining or threshold adjustment.</div>';
-    return;
-  }
+  if (!allAlerts.length) return;
 
   // Pattern donut
   const ptMap = {};
   allAlerts.forEach(a => { ptMap[formatPatternName(a.patternType)] = (ptMap[formatPatternName(a.patternType)]||0)+1; });
-  const colors = ['#00579C','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#475569','#94A3B8'];
+  // Curated cyber-fintech palette — vibrant, distinct, dark-background-optimised
+  const colors = ['#6366F1','#06B6D4','#10B981','#A855F7','#F59E0B','#F43F5E','#3B82F6','#64748B'];
   if (dbCharts.donut) dbCharts.donut.destroy();
   dbCharts.donut = new Chart(document.getElementById('chart-donut').getContext('2d'), {
     type:'doughnut',
@@ -446,53 +612,9 @@ function renderDashboard() {
     });
   }
 
-  // Timeline — use real per-transaction timestamps from backend pipeline
-  let bins, tlLabels;
-  if (activityBins && activityBins.bins && activityBins.bins.length === 48) {
-    bins = activityBins.bins;
-    tlLabels = activityBins.labels;
-  } else {
-    bins = new Array(48).fill(0);
-    const tsDates = allAlerts.map(a => {
-      const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
-      return ts ? new Date(ts.replace(' ','T')) : null;
-    }).filter(Boolean);
-    const WIN2 = tsDates.length ? new Date(Math.min(...tsDates)) : new Date(Date.now() - 48*3600000);
-    allAlerts.forEach(a => {
-      const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
-      if (ts) {
-        const h = Math.floor((new Date(ts.replace(' ','T')) - WIN2) / 3600000);
-        if (h >= 0 && h < 48) { bins[h]++; return; }
-      }
-    });
-    tlLabels = Array.from({length:48},(_,i)=>{
-      const d = new Date(WIN2.getTime() + i*3600000);
-      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
-    });
-  }
-  if (dbCharts.tl) dbCharts.tl.destroy();
-  const isDark = document.body.classList.contains('dark');
-  const axisColor = isDark ? '#94A3B8' : '#475569';
-  dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
-    type:'line',
-    data:{ labels: tlLabels,
-      datasets:[
-        { label:'Flagged Transactions', data:bins, borderColor:'#DA251C', backgroundColor:'rgba(218,37,28,.08)', tension:.4, fill:true, pointRadius:1, borderWidth:2 }
-      ]},
-    options:{ animation:false, plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
-      scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
-               y:{ticks:{color:axisColor,font:{size:10}}} },
-      maintainAspectRatio:false }
-  });
+  // Timeline — custom date range picker driven
+  renderActivityChart();
 
-  // Recent
-  document.getElementById('db-recent').innerHTML = allAlerts.slice(0,5).map(a => `
-    <div class="mini-card" onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
-         onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
-      <div><div class="mini-card-name">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
-      <div class="mini-card-sub">${a.sub}</div></div>
-      <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-    </div>`).join('');
 
   const cnt = {confirm:0,review:0,dismiss:0};
   Object.values(decisions).forEach(d => { if(cnt[d.decision]!==undefined) cnt[d.decision]++; });
@@ -500,6 +622,89 @@ function renderDashboard() {
   document.getElementById('dc-review').textContent  = cnt.review;
   document.getElementById('dc-dismiss').textContent = cnt.dismiss;
   document.getElementById('dc-pending').textContent = allAlerts.length - Object.keys(decisions).length;
+}
+
+function renderActivityChart() {
+  const isDark = document.body.classList.contains('dark');
+  const axisColor = isDark ? '#94A3B8' : '#475569';
+
+  // Get range from pickers
+  const startEl = document.getElementById('chart-range-start');
+  const endEl   = document.getElementById('chart-range-end');
+  const rangeStart = startEl?.value ? new Date(startEl.value) : null;
+  const rangeEnd   = endEl?.value   ? new Date(endEl.value)   : null;
+
+  let bins, tlLabels;
+
+  // Gather all alert timestamps
+  const allTs = allAlerts.map(a => {
+    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+    return ts ? new Date(ts.replace(' ','T')) : null;
+  }).filter(Boolean);
+
+  const WIN_START = rangeStart || (allTs.length ? new Date(Math.min(...allTs)) : new Date(Date.now() - 48*3600000));
+  const WIN_END   = rangeEnd   || (allTs.length ? new Date(Math.max(...allTs) + 3600000) : new Date(WIN_START.getTime() + 48*3600000));
+  const totalHours = Math.max(1, Math.ceil((WIN_END - WIN_START) / 3600000));
+  const bucketHours = Math.max(1, Math.ceil(totalHours / 48));
+  const numBuckets = Math.ceil(totalHours / bucketHours);
+
+  bins = new Array(numBuckets).fill(0);
+  allAlerts.forEach(a => {
+    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+    if (ts) {
+      const d = new Date(ts.replace(' ','T'));
+      if (rangeStart && d < rangeStart) return;
+      if (rangeEnd   && d > rangeEnd)   return;
+      const idx = Math.floor((d - WIN_START) / (bucketHours * 3600000));
+      if (idx >= 0 && idx < numBuckets) bins[idx]++;
+    }
+  });
+  tlLabels = Array.from({length:numBuckets},(_,i) => {
+    const d = new Date(WIN_START.getTime() + i * bucketHours * 3600000);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
+  });
+
+  if (dbCharts.tl) dbCharts.tl.destroy();
+  dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
+    type:'line',
+    data:{ labels: tlLabels,
+      datasets:[{ label:'Flagged Transactions', data:bins,
+        borderColor:'#DA251C', backgroundColor:'rgba(218,37,28,.08)',
+        tension:.4, fill:true, pointRadius:1, borderWidth:2 }]},
+    options:{ animation:false,
+      plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
+      scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
+               y:{ticks:{color:axisColor,font:{size:10}},beginAtZero:true} },
+      maintainAspectRatio:false }
+  });
+}
+
+function renderInvestigateEmpty() {
+  // Clear graph and panels to show a welcoming empty state
+  if (cy) { cy.destroy(); cy = null; }
+  document.getElementById('route-bar').innerHTML = '';
+  document.getElementById('is-moved').textContent = '—';
+  document.getElementById('is-span').textContent  = '—';
+  document.getElementById('is-hops').textContent  = '—';
+  document.getElementById('is-pat').textContent   = '—';
+  document.getElementById('tl-card').innerHTML = '<span style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span>';
+  document.getElementById('tl-dots').innerHTML = '';
+  document.getElementById('tl-counter').textContent = '— / —';
+  document.getElementById('ir-pattern-sec').innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-3);padding:var(--sp-8) 0;text-align:center">
+      <div style="font-size:2.5rem;opacity:.3">🔍</div>
+      <div style="font-family:var(--sans);font-size:var(--text-base);font-weight:700;color:var(--muted)">${allAlerts.length} Alerts Loaded</div>
+      <div style="font-family:var(--mono);font-size:var(--text-sm);color:var(--light)">Select an alert from the list<br>to begin investigation</div>
+    </div>`;
+  document.getElementById('dec-status-box').style.display = 'none';
+  const cyEl = document.getElementById('cy');
+  if (cyEl) cyEl.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;height:100%;opacity:.2">
+      <div style="text-align:center">
+        <div style="font-size:4rem">📊</div>
+        <div style="font-family:var(--mono);font-size:var(--text-sm);color:var(--muted);margin-top:var(--sp-2)">Select an alert to view graph</div>
+      </div>
+    </div>`;
 }
 
 function jumpInvestigate(id) { showView('investigate'); loadAlertById(id); }
@@ -539,32 +744,35 @@ function renderSidebar() {
   const el = document.getElementById('alert-list');
   if (!el) return;
   el.innerHTML = filtered.map(a => {
-    const dec  = decisions[a.id];
+    const dec    = decisions[a.id];
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
-    const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
-    const conf   = Math.round((a.confidence||0)*100);
-    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
+    // Decision-tinted badge: confirmed→green, review→amber, dismiss→red, none→severity colour
+    const decBadge = dec
+      ? { confirm:'badge-dec-confirm', review:'badge-dec-review', dismiss:'badge-dec-dismiss' }[dec.decision] || (SEV_BADGE[a.severity]||'badge-light')
+      : (SEV_BADGE[a.severity]||'badge-light');
+    const subPats  = (a.subPatterns||[]).filter(p=>p&&p!==a.patternType);
+    const secLabel = subPats.length
+      ? `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">+ ${subPats.map(formatPatternName).join(', ')}</div>`
+      : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
-      ${decDot}
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
         <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${formatAlertId(a.id)}</div>
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
+        <span class="badge ${decBadge}">${a.severity}</span>
       </div>
-      
-      <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--sp-3)">
+      <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:2px">
         ${formatPatternName(a.patternType)}
       </div>
-      
-      <div style="display:flex; gap:var(--sp-4); margin-bottom:var(--sp-2); font-family:var(--mono);">
+      ${secLabel}
+      <div style="display:flex; gap:var(--sp-4); margin-top:var(--sp-2); margin-bottom:var(--sp-2); font-family:var(--mono);">
         <div style="display:flex; flex-direction:column;">
           <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Amount</span>
           <span style="font-size:var(--text-base); font-weight:700; color:var(--blue);">${a.totalMoved}</span>
         </div>
         <div style="display:flex; flex-direction:column;">
-          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Time</span>
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Start</span>
           <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${(a.timeSpan || '').split(' ')[0]}</span>
         </div>
         <div style="display:flex; flex-direction:column;">
@@ -582,11 +790,12 @@ function renderSidebar() {
 async function loadAlertById(id) {
   if (!alertDetails[id]) {
     try {
-      const r = await fetch(`${API_BASE}/alerts/${id}`);
+      const r = await apiFetch(`/alerts/${id}`);
       if (!r.ok) return;
       alertDetails[id] = await r.json();
+      buildIndexes(); // refresh indexes with newly loaded detail
       renderDashboard();
-    } catch(e) { toast('Error loading alert','error'); return; }
+    } catch(e) { return; }
   }
   currentAlert = alertDetails[id];
   currentStep  = -1;
@@ -618,12 +827,12 @@ async function loadAlertById(id) {
 /* ════════════════════════════════════════════
    GRAPH
 ════════════════════════════════════════════ */
-// Role-based node palette (dark-native, no cream)
+// Role-based node palette — distinct per role
 const ROLE_NODE = {
-  source:       { bg:'#00579C', border:'#3B82F6', text:'#FFFFFF' },
-  destination:  { bg:'#991B1B', border:'#EF4444', text:'#FFFFFF' },
-  intermediary: { bg:'#1E3A5F', border:'#334155', text:'#94A3B8' },
-  default:      { bg:'#1E3A5F', border:'#334155', text:'#94A3B8' },
+  source:       { bg:'#00579C', border:'#60A5FA', text:'#FFFFFF' },   // UBI Navy
+  destination:  { bg:'#DA251C', border:'#FCA5A5', text:'#FFFFFF' },   // UBI Red
+  intermediary: { bg:'#5B21B6', border:'#A78BFA', text:'#FFFFFF' },   // Deep Violet
+  default:      { bg:'#5B21B6', border:'#A78BFA', text:'#FFFFFF' },
 };
 const SEV_RING = {
   high:   '#EF4444',
@@ -714,19 +923,23 @@ function getLayout(alert) {
   }
 
   if (pt === 'scatterGather' || pt === 'gatherScatter') {
+    // Root at destination side so visual flow is S(right) → intermediaries(middle) → D(left)
+    const dsts = nodes.filter(n => ['destination','collector'].includes((n.role||'').toLowerCase())).map(n=>`#${n.id}`);
     const srcs = nodes.filter(n => ['source','distributor'].includes((n.role||'').toLowerCase())).map(n=>`#${n.id}`);
     return {
-      name: 'breadthfirst', directed: true,
-      roots: srcs.length ? srcs : undefined,
+      name: 'breadthfirst', directed: false,
+      roots: dsts.length ? dsts : (srcs.length ? srcs : undefined),
       padding: 60, spacingFactor: 2.4, avoidOverlap: true,
     };
   }
 
   if (pt === 'stack') {
+    const dsts = nodes.filter(n => (n.role||'').toLowerCase() === 'destination').map(n=>`#${n.id}`);
+    const srcs = nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`);
     return {
-      name: 'breadthfirst', directed: true,
+      name: 'breadthfirst', directed: false,
       padding: 60, spacingFactor: 2.4, avoidOverlap: true,
-      roots: nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`),
+      roots: dsts.length ? dsts : (srcs.length ? srcs : undefined),
     };
   }
 
@@ -755,7 +968,7 @@ function renderGraph() {
     } else if (r === 'destination') {
       shortLabel = 'D';
     } else {
-      shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
+      shortLabel = String(intermediaryIdx);
       intermediaryIdx++;
     }
     elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:roleKey,
@@ -936,17 +1149,53 @@ function renderDots() {
 /* ════════════════════════════════════════════
    RIGHT PANEL
 ════════════════════════════════════════════ */
+function generateHumanExplanation(a) {
+  const pt = a.patternType;
+  const n  = a.hops ?? '?';
+  const nodes = (a.nodes||[]).length || '?';
+  const amt  = a.totalMoved || '';
+  const topEdges = (a.edges||[]).filter(e=>e.importance>=0.7).length;
+  const riskNote = topEdges > 0
+    ? ` <strong>${topEdges} edge${topEdges>1?'s':''}</strong> scored high suspicion by the GNN explainer.`
+    : ' GNN edge importance scores were moderate.';
+  const EXPLANATIONS = {
+    fanOut:       `A <strong>single source account</strong> dispersed ${amt} across multiple recipients — a classic structuring tactic to avoid detection thresholds. The model traced <strong>${n} outbound transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    fanIn:        `Multiple accounts <strong>funnelled funds into one collector</strong>, aggregating ${amt}. This consolidation pattern is associated with layering before placement. <strong>${n} inbound transfers</strong> across <strong>${nodes} accounts</strong> were flagged.${riskNote}`,
+    cycle:        `Money <strong>returned to its origin</strong> through a circular chain — a classic layering technique that obscures the audit trail. The GNN traced a <strong>${n}-hop loop</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    scatterGather:`Funds were <strong>fanned out through intermediaries then reconverged</strong> — a scatter-gather pattern that disguises the original source. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong> were detected.${riskNote}`,
+    gatherScatter:`A <strong>central hub collected from multiple sources</strong> then redistributed to multiple destinations, consistent with a clearing-house fraud pattern. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    stack:        `A <strong>linear chain of sequential transfers</strong> (layering) was detected, where each hop adds distance between the origin and ultimate destination. <strong>${n} hops</strong> across <strong>${nodes} accounts</strong>, moving ${amt}.${riskNote}`,
+    bipartite:    `Two distinct groups of accounts show <strong>cross-group transfers only</strong>, indicating coordinated movement between controlled entities. <strong>${n} edges</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    random:       `A <strong>complex network with no single dominant pattern</strong> was flagged. The GNN detected elevated suspicion across <strong>${n} transactions</strong> involving <strong>${nodes} accounts</strong>.${riskNote}`,
+  };
+  return EXPLANATIONS[pt] || `The GNN model flagged <strong>${n} transactions</strong> across <strong>${nodes} accounts</strong>, moving ${amt}. Edge importance scores indicate suspicious flow.${riskNote}`;
+}
+
 function renderRightPanel() {
   if (!currentAlert) return;
   const a = currentAlert;
   const sevColor = SEV_COLOR[a.severity]||'var(--muted)';
+  const dec = decisions[a.id];
+  const decBadge = dec
+    ? { confirm:'badge-dec-confirm', review:'badge-dec-review', dismiss:'badge-dec-dismiss' }[dec.decision] || (SEV_BADGE[a.severity]||'badge-light')
+    : (SEV_BADGE[a.severity]||'badge-light');
+
+  // Secondary patterns
+  const subPats = (a.subPatterns||[]).filter(p=>p&&p!==a.patternType);
+  const secHTML = subPats.length
+    ? `<div style="margin-top:var(--sp-2);display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+        <span style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px">Also detected:</span>
+        ${subPats.map(p=>`<span class="badge badge-light" style="font-size:9px">${PATTERN_ICONS[p]||''} ${formatPatternName(p)}</span>`).join('')}
+       </div>`
+    : '';
 
   document.getElementById('ir-pattern-sec').innerHTML = `
     <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
-      <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2);align-items:center">
+      <span class="badge ${decBadge}">${a.severity}</span>
     </div>
-    <div class="ir-desc">${a.description||''}</div>`;
+    ${secHTML}
+    <div class="ir-desc" style="margin-top:var(--sp-3)">${generateHumanExplanation(a)}</div>`;
 
   document.getElementById('ir-source-sec').style.display='none';
   document.getElementById('ir-roles-sec').style.display='none';
@@ -972,7 +1221,7 @@ async function postDecision(decision) {
   if (!currentAlert) return;
   const reason = document.getElementById('dec-reason').value||'';
   try {
-    const r = await fetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
+    const r = await apiFetch(`/alerts/${currentAlert.id}/decision`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({decision,reason})
     });
@@ -1118,7 +1367,7 @@ function runSearch(q, type='auto') {
 ════════════════════════════════════════════ */
 async function loadValidation() {
   try {
-    const r=await fetch(`${API_BASE}/validation`);
+    const r=await apiFetch('/validation');
     if (!r.ok) {
       document.getElementById('val-compare-body').innerHTML=
         `<tr><td colspan="5" style="color:var(--red);padding:var(--sp-4)">Run validator.py first to generate validation data.</td></tr>`;
@@ -1174,8 +1423,8 @@ function pct(v){ return v!=null?`${Math.round((v||0)*100)}%`:'—'; }
 ════════════════════════════════════════════ */
 async function loadWhitelist() {
   const [wlRes, suppRes] = await Promise.all([
-    fetch(`${API_BASE}/whitelist`).then(r=>r.json()).catch(()=>null),
-    fetch(`${API_BASE}/alerts/suppressed`).then(r=>r.json()).catch(()=>[]),
+    apiFetch('/whitelist').then(r=>r.json()).catch(()=>null),
+    apiFetch('/alerts/suppressed').then(r=>r.json()).catch(()=>[]),
   ]);
   if (wlRes) renderWhitelistPanel(wlRes);
   renderSuppressed(Array.isArray(suppRes) ? suppRes : []);
@@ -1223,7 +1472,7 @@ async function addWhitelistAccount() {
   if (!id) { toast('Enter an account ID','warning'); return; }
   const reason=(document.getElementById('wl-reason-inp').value||'').trim();
   try {
-    const r=await fetch(`${API_BASE}/whitelist/account`,{
+    const r=await apiFetch('/whitelist/account',{
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({account_id:id,reason})
     });
@@ -1237,7 +1486,7 @@ async function addWhitelistAccount() {
 
 async function removeWhitelistAccount(id) {
   try {
-    await fetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
+    await apiFetch(`/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
     await loadWhitelist();
     toast(`Removed ${id} from whitelist`,'success');
   } catch(e){ toast('Error removing from whitelist','error'); }
