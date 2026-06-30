@@ -33,7 +33,6 @@ PATTERN_DESCRIPTIONS = {
     "SCATTER_GATHER":  "Funds fan out through intermediaries then reconverge",
     "GATHER_SCATTER":  "Hub collects from many sources then redistributes",
     "BIPARTITE":       "Two distinct groups with cross-group transfers only",
-    "STACK":           "Linear chain of sequential transfers (layering)",
     "RANDOM":          "Complex topology — no single dominant pattern",
 }
 
@@ -93,10 +92,6 @@ def _detect_all_patterns(sub: nx.DiGraph) -> list[str]:
                     found.append("SCATTER_GATHER")
     except Exception:
         pass
-
-    # STACK
-    if n >= 3 and all(in_deg[v] <= 1 and out_deg[v] <= 1 for v in nodes):
-        found.append("STACK")
 
     return found if found else ["RANDOM"]
 
@@ -332,7 +327,7 @@ def _compute_risk_indicators(sub, comp, edge_data, sent, recv, label, amounts,
         )
 
     # 6. Layering depth.
-    if pattern in ("STACK", "SCATTER_GATHER", "GATHER_SCATTER") and len(edge_data) >= 3:
+    if pattern in ("SCATTER_GATHER", "GATHER_SCATTER") and len(edge_data) >= 3:
         ind.append(
             f"{len(edge_data)}-hop chain inserts multiple layers between origin and destination with no "
             f"apparent economic purpose — a hallmark of layering."
@@ -439,7 +434,8 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         "ml_score_rf":  None,
         "ml_score_gnn": round(cluster_prob, 4),
         "risk_flagged": True,
-        "time_span":    min(ts).strftime("%Y-%m-%d %H:%M") if ts else "",
+        "time_span":    (f"{min(ts).strftime('%Y-%m-%d %H:%M')} — {max(ts).strftime('%Y-%m-%d %H:%M')}"
+                         if ts and max(ts) != min(ts) else (min(ts).strftime("%Y-%m-%d %H:%M") if ts else "")),
         "hops":         len(edge_data),
         "total_moved":  float(sum(amounts)),
         "route_nodes":  [label.get(n, n) for n in comp],

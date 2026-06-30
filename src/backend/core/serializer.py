@@ -4,7 +4,7 @@ PATTERN_CAMEL = {
     "FAN_OUT": "fanOut", "FAN_IN": "fanIn",
     "CYCLE": "cycle", "SCATTER_GATHER": "scatterGather",
     "GATHER_SCATTER": "gatherScatter", "BIPARTITE": "bipartite",
-    "STACK": "stack", "RANDOM": "random",
+    "RANDOM": "random",
     "MULTIGNN": "multignn", "UNKNOWN": "unknown",
 }
 
@@ -12,7 +12,7 @@ PATTERN_NAME = {
     "FAN_OUT": "Fan-Out", "FAN_IN": "Fan-In",
     "CYCLE": "Cycle", "SCATTER_GATHER": "Scatter-Gather",
     "GATHER_SCATTER": "Gather-Scatter", "BIPARTITE": "Bipartite",
-    "STACK": "Stack", "RANDOM": "Complex Network",
+    "RANDOM": "Complex Network",
     "MULTIGNN": "Multi-GNN Cluster", "UNKNOWN": "Unknown",
 }
 

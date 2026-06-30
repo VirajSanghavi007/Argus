@@ -64,7 +64,6 @@ class PatternType(str, Enum):
     SCATTER_GATHER = "SCATTER_GATHER"
     GATHER_SCATTER = "GATHER_SCATTER"
     BIPARTITE = "BIPARTITE"
-    STACK = "STACK"
     RANDOM = "RANDOM"
 
 

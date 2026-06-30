@@ -41,10 +41,6 @@ DEFAULT_WHITELIST: dict = {
             "reason": "Clearing house or settlement hub operations",
             "exempt_if": ["is_exempt_bank"],
         },
-        "STACK": {
-            "reason": "Multi-tier corporate fund routing (holding structures)",
-            "exempt_if": ["is_business", "is_exempt_bank"],
-        },
         "RANDOM": {
             "reason": "Unstructured activity from known low-risk entities",
             "exempt_if": ["is_exempt_bank"],

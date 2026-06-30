@@ -144,14 +144,16 @@
           box-shadow:0 8px 32px rgba(0,0,0,.25)">
           <div style="font-family:var(--sans);font-size:11px;font-weight:700;color:var(--muted);
             text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Settings</div>
-          <!-- Theme toggle -->
+          <!-- Theme cycle: Light → Dark → System -->
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-            <span style="font-family:var(--mono);font-size:13px;color:var(--text)">Dark Mode</span>
-            <button id="dark-toggle" onclick="toggleDark()" aria-label="Toggle dark mode" style="
+            <span style="font-family:var(--mono);font-size:13px;color:var(--text)">Theme</span>
+            <button id="dark-toggle" onclick="toggleDark()" aria-label="Switch theme (Light, Dark, System)" style="
+              display:flex;align-items:center;gap:6px;
               background:var(--bg);border:1px solid var(--border);border-radius:20px;
               padding:4px 12px;cursor:pointer;font-size:13px;color:var(--text);line-height:1;
               transition:all .15s ease">
               <span id="dark-toggle-icon">☀️</span>
+              <span id="dark-toggle-label">Light</span>
             </button>
           </div>
           <!-- Logout -->
@@ -242,7 +244,6 @@
               <option value="scatterGather">Scatter-Gather</option>
               <option value="gatherScatter">Gather-Scatter</option>
               <option value="bipartite">Bipartite</option>
-              <option value="stack">Stack</option>
               <option value="random">Random</option>
             </select>
             <select id="inv-priority-filter" onchange="renderSidebar()" style="flex:1" aria-label="Filter by Priority">
@@ -292,10 +293,10 @@
             <span class="tl-counter" id="tl-counter">— / —</span>
             <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
               <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)"
-                onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev <span class="kbd-hint">←</span></button>
+                onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev</button>
 
               <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)"
-                aria-label="Next transaction">Next ▶ <span class="kbd-hint">→</span></button>
+                aria-label="Next transaction">Next ▶</button>
             </div>
           </div>
           <div class="tl-card" id="tl-card"><span

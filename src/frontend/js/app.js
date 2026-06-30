@@ -299,14 +299,12 @@ function formatPatternName(pt) {
   const map = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN',
     scatterGather:'SCATTER-GATHER', gatherScatter:'GATHER-SCATTER',
-    cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK', random:'RANDOM',
+    cycle:'CYCLE', bipartite:'BIPARTITE', random:'RANDOM',
   };
   return map[pt] || pt.toUpperCase();
 }
-const PATTERN_ICONS = {
-  fanOut:'📤', fanIn:'📥', cycle:'🔄', scatterGather:'🔀',
-  gatherScatter:'⚖️', bipartite:'⚖️', stack:'📚', random:'❓'
-};
+// Emojis removed — patterns render as text only.
+const PATTERN_ICONS = {};
 
 const SIGNAL_ICONS = {
   'Rapid Fan-Out':'⚡', 'Round-Trip':'🔁', 'Structuring':'💰',
@@ -514,11 +512,33 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 /* ════════════════════════════════════════════
    VIEW SWITCHING
 ════════════════════════════════════════════ */
-function toggleDark() {
-  const dark = document.body.classList.toggle('dark');
+// Theme: cycles Light → Dark → System. 'system' follows the OS preference.
+const THEME_ORDER = ['light', 'dark', 'system'];
+const THEME_ICON = { light: '☀️', dark: '🌙', system: '🖥️' };
+const THEME_LABEL = { light: 'Light', dark: 'Dark', system: 'System' };
+
+function _systemPrefersDark() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function applyTheme(theme) {
+  const effectiveDark = theme === 'dark' || (theme === 'system' && _systemPrefersDark());
+  document.body.classList.toggle('dark', effectiveDark);
   const icon = document.getElementById('dark-toggle-icon');
-  if (icon) icon.textContent = dark ? '🌙' : '☀️';
-  localStorage.setItem('aml-dark', dark ? '1' : '');
+  if (icon) icon.textContent = THEME_ICON[theme] || '☀️';
+  const lbl = document.getElementById('dark-toggle-label');
+  if (lbl) lbl.textContent = THEME_LABEL[theme] || 'Light';
+}
+function toggleDark() {
+  const cur = localStorage.getItem('aml-theme') || 'light';
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(cur) + 1) % THEME_ORDER.length];
+  localStorage.setItem('aml-theme', next);
+  applyTheme(next);
+}
+// React to OS theme changes while in 'system' mode
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem('aml-theme') || 'light') === 'system') applyTheme('system');
+  });
 }
 function toggleSettings() {
   const p = document.getElementById('settings-popover');
@@ -542,7 +562,12 @@ document.addEventListener('click', e => {
   const pop = document.getElementById('settings-popover');
   if (pop && btn && !btn.contains(e.target) && !pop.contains(e.target)) pop.style.display = 'none';
 });
-(function(){if(localStorage.getItem('aml-dark')){document.body.classList.add('dark');const icon=document.getElementById('dark-toggle-icon');if(icon)icon.textContent='🌙';}})();
+(function(){
+  // Migrate the old boolean key, then apply the saved theme.
+  let theme = localStorage.getItem('aml-theme');
+  if (!theme) { theme = localStorage.getItem('aml-dark') ? 'dark' : 'light'; localStorage.setItem('aml-theme', theme); }
+  applyTheme(theme);
+})();
 
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -949,21 +974,15 @@ function getLayout(alert) {
     };
   }
 
-  if (pt === 'stack') {
-    const dsts = nodes.filter(n => (n.role||'').toLowerCase() === 'destination').map(n=>`#${n.id}`);
-    const srcs = nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`);
-    return {
-      name: 'breadthfirst', directed: false,
-      padding: 60, spacingFactor: 2.4, avoidOverlap: true,
-      roots: dsts.length ? dsts : (srcs.length ? srcs : undefined),
-    };
-  }
 
   return { name: 'cose', padding: 60, animate: false, nodeRepulsion: 12000, idealEdgeLength: 160, nodeOverlap: 20 };
 }
 function renderGraph() {
   if (!currentAlert) return;
   if (cy) cy.destroy();
+  // Clear any empty-state placeholder so Cytoscape mounts into a clean, correctly-sized box
+  const cyEl = document.getElementById('cy');
+  if (cyEl) cyEl.innerHTML = '';
 
   const elements = [];
   // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
@@ -1064,8 +1083,10 @@ function renderGraph() {
   // Tap on background → reset highlight and fit view
   cy.on('tap', e => { if (e.target === cy) { resetHighlight(); cy.fit(undefined, 40); } });
   // Always fit the graph to the container once the layout settles (kills whitespace)
-  cy.one('layoutstop', () => cy.fit(undefined, 45));
-  cy.ready(() => cy.fit(undefined, 45));
+  cy.one('layoutstop', () => { cy.resize(); cy.fit(undefined, 45); });
+  cy.ready(() => { cy.resize(); cy.fit(undefined, 45); });
+  // Fallback: re-fit shortly after, once the container has its final size
+  setTimeout(() => { if (cy) { cy.resize(); cy.fit(undefined, 45); } }, 120);
 }
 
 function highlightNode(id) {
@@ -1188,7 +1209,6 @@ function generateHumanExplanation(a) {
     cycle:        `Money <strong>returned to its origin</strong> through a circular chain — a classic layering technique that obscures the audit trail. The GNN traced a <strong>${n}-hop loop</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
     scatterGather:`Funds were <strong>fanned out through intermediaries then reconverged</strong> — a scatter-gather pattern that disguises the original source. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong> were detected.${riskNote}`,
     gatherScatter:`A <strong>central hub collected from multiple sources</strong> then redistributed to multiple destinations, consistent with a clearing-house fraud pattern. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
-    stack:        `A <strong>linear chain of sequential transfers</strong> (layering) was detected, where each hop adds distance between the origin and ultimate destination. <strong>${n} hops</strong> across <strong>${nodes} accounts</strong>, moving ${amt}.${riskNote}`,
     bipartite:    `Two distinct groups of accounts show <strong>cross-group transfers only</strong>, indicating coordinated movement between controlled entities. <strong>${n} edges</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
     random:       `A <strong>complex network with no single dominant pattern</strong> was flagged. The GNN detected elevated suspicion across <strong>${n} transactions</strong> involving <strong>${nodes} accounts</strong>.${riskNote}`,
   };
@@ -1209,7 +1229,7 @@ function renderRightPanel() {
   const secHTML = subPats.length
     ? `<div style="margin-top:var(--sp-2);display:flex;flex-wrap:wrap;gap:4px;align-items:center">
         <span style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px">Also detected:</span>
-        ${subPats.map(p=>`<span class="badge badge-light" style="font-size:9px">${PATTERN_ICONS[p]||''} ${formatPatternName(p)}</span>`).join('')}
+        ${subPats.map(p=>`<span class="badge badge-light" style="font-size:9px">${formatPatternName(p)}</span>`).join('')}
        </div>`
     : '';
 
@@ -1228,7 +1248,7 @@ function renderRightPanel() {
     </div>` : '';
 
   document.getElementById('ir-pattern-sec').innerHTML = `
-    <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+    <div class="ir-pattern-name" style="color:${sevColor}">${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2);align-items:center">
       <span class="badge ${decBadge}">${a.severity}</span>
     </div>
@@ -1334,7 +1354,7 @@ function doSearch() {
 function qFilter(val, type='pat') {
   const patDisplayMap = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
-    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE', stack:'STACK',
+    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE',
   };
   document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
   event.currentTarget.classList.add('active');
@@ -1388,7 +1408,7 @@ function runSearch(q, type='auto') {
          aria-label="${patLabel}, ${a.severity} severity"
          onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
       <div style="font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-bottom:var(--sp-2);color:var(--text)">
-        ${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}
+        ${patLabel}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
