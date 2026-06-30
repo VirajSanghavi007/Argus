@@ -1,6 +1,7 @@
 # Auth-protected. See /auth/login to obtain a session token.
 import asyncio
 import json
+import os
 import threading
 import time
 import uuid
@@ -27,6 +28,7 @@ from ..core.whitelist import (
     DEFAULT_WHITELIST,
 )
 from ..utils.logging import setup_logging
+from . import ingest_store
 try:
     from database import service as db
 except ImportError:
@@ -317,7 +319,7 @@ async def add_request_context(request: Request, call_next):
 
 # ── Auth Endpoints ──────────────────────────────────────────────────────────
 
-_AUTH_EXEMPT = {"/health", "/status", "/auth/login", "/"}
+_AUTH_EXEMPT = {"/health", "/status", "/auth/login", "/", "/ingest"}
 
 _AUTH_EXEMPT_PREFIXES = ("/static/",)
 
@@ -373,6 +375,89 @@ def auth_me(request: Request):
     if not session:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"username": session["username"], "company_id": session["company_id"]}
+
+
+# ── Transaction Ingestion API ───────────────────────────────────────────────
+# The "API layer" for streaming transaction data into Argus. Accepts a single
+# transaction or a batch. Secured with an optional API key (X-API-Key header,
+# set ARGUS_INGEST_KEY to enable). Rows are queued and folded into the next scan.
+
+class TransactionIn(BaseModel):
+    """One transaction. Field names match the IBM/tx.csv schema; snake_case
+    aliases are accepted too so producers can POST either style."""
+    timestamp: str | None = Field(default=None, alias="Timestamp")
+    from_bank: str = Field(alias="From Bank")
+    from_account: str = Field(alias="From Account")
+    to_bank: str = Field(alias="To Bank")
+    to_account: str = Field(alias="To Account")
+    amount_paid: float = Field(alias="Amount Paid")
+    amount_received: float | None = Field(default=None, alias="Amount Received")
+    payment_currency: str = Field(default="US Dollar", alias="Payment Currency")
+    receiving_currency: str = Field(default="US Dollar", alias="Receiving Currency")
+    payment_format: str = Field(default="ACH", alias="Payment Format")
+
+    model_config = {"populate_by_name": True}
+
+    def to_row(self) -> dict:
+        return {
+            "Timestamp": self.timestamp or ingest_store.now_iso(),
+            "From Bank": self.from_bank,
+            "From Account": self.from_account,
+            "To Bank": self.to_bank,
+            "To Account": self.to_account,
+            "Amount Received": self.amount_received if self.amount_received is not None else self.amount_paid,
+            "Receiving Currency": self.receiving_currency,
+            "Amount Paid": self.amount_paid,
+            "Payment Currency": self.payment_currency,
+            "Payment Format": self.payment_format,
+        }
+
+
+def _check_ingest_key(request: Request) -> None:
+    required = os.environ.get("ARGUS_INGEST_KEY")
+    if required and request.headers.get("X-API-Key") != required:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+@app.post("/ingest")
+async def ingest(request: Request):
+    """Accept transaction data — a single object, a bare list, or
+    {"transactions": [...]}. Validates each row and queues it for the next scan."""
+    _check_ingest_key(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Body must be valid JSON")
+
+    if isinstance(payload, dict) and "transactions" in payload:
+        raw = payload["transactions"]
+    elif isinstance(payload, dict):
+        raw = [payload]
+    elif isinstance(payload, list):
+        raw = payload
+    else:
+        raise HTTPException(status_code=422, detail="Expected a transaction object or a list")
+
+    rows, errors = [], []
+    for i, item in enumerate(raw):
+        try:
+            rows.append(TransactionIn(**item).to_row())
+        except Exception as e:
+            errors.append({"index": i, "error": str(e)})
+
+    if not rows:
+        raise HTTPException(status_code=422, detail={"message": "No valid transactions", "errors": errors})
+
+    stored = ingest_store.append_transactions(rows)
+    rid = request_id.get()
+    logger.info(f"[{rid}] Ingested {stored} transaction(s) ({len(errors)} rejected)")
+    return {
+        "received": len(raw),
+        "stored": stored,
+        "rejected": errors,
+        "total_queued": ingest_store.count_live(),
+        "note": "Queued. Transactions enter detection on the next scan.",
+    }
 
 
 FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
