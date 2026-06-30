@@ -523,10 +523,6 @@ function renderSidebar() {
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
     const conf   = Math.round((a.confidence||0)*100);
     const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
-    const mlBg  = mlPct>=70 ? 'var(--red-bg)'   : mlPct>=40 ? 'var(--amber-bg)'  : 'var(--green-bg)';
-    const mlClr = mlPct>=70 ? 'var(--red)'      : mlPct>=40 ? 'var(--amber)'     : 'var(--green)';
-    const mlBd  = mlPct>=70 ? 'var(--red-bd)'   : mlPct>=40 ? 'var(--amber-bd)'  : 'var(--green-bd)';
-    const mlBadge = mlPct != null ? `<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>` : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
@@ -539,8 +535,6 @@ function renderSidebar() {
       <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--sp-3)">
         ${formatPatternName(a.patternType)}
       </div>
-      
-      ${mlBadge ? `<div class="ac-badges" style="margin-bottom:var(--sp-2)">${mlBadge}</div>` : ''}
       
       <div style="display:flex; gap:var(--sp-4); margin-bottom:var(--sp-2); font-family:var(--mono);">
         <div style="display:flex; flex-direction:column;">
@@ -556,8 +550,6 @@ function renderSidebar() {
           <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${a.hops}</span>
         </div>
       </div>
-      
-      <div class="conf-bar-bg" style="height:4px; margin-top:var(--sp-2)"><div class="conf-bar" style="width:${conf}%; height:100%; background:var(--red);"></div></div>
     </div>`;
   }).join('');
 }
@@ -594,7 +586,6 @@ async function loadAlertById(id) {
   document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
   document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
   document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = `${Math.round((currentAlert.confidence||0)*100)}%`;
   document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
 
   renderGraph();
@@ -846,7 +837,6 @@ function applyStep(idx) {
       <span>Recv: <strong>${tx.recv}</strong></span>
       <span>${tx.fromBank} → ${tx.toBank}</span>
       <span>${tx.ts||'—'}</span>
-      <span style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:${impColor};font-weight:500">🔍 ML Importance: ${Math.round(imp*100)}%</span>
     </div>`;
   if (cy) {
     cy.edges().removeClass('hl-edge');
@@ -902,8 +892,6 @@ function renderRightPanel() {
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
       <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-      <span class="badge badge-light">${Math.round((a.confidence||0)*100)}% CONF</span>
-      ${a.mlScore != null ? `<span class="badge" style="background:${a.mlScore>=0.7?'var(--red-bg)':a.mlScore>=0.4?'var(--amber-bg)':'var(--green-bg)'};color:${a.mlScore>=0.7?'var(--red)':a.mlScore>=0.4?'var(--amber)':'var(--green)'};border:1px solid ${a.mlScore>=0.7?'var(--red-bd)':a.mlScore>=0.4?'var(--amber-bd)':'var(--green-bd)'}">🤖 ML ${Math.round(a.mlScore*100)}%</span>` : ''}
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
 
@@ -1079,9 +1067,6 @@ function runSearch(q, type='auto') {
   const cards = res.map(a => {
     const patLabel = a.name || formatPatternName(a.patternType);
     const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
-    const mlBg  = mlPct != null ? (mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)') : '';
-    const mlClr = mlPct != null ? (mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)') : '';
-    const mlBd  = mlPct != null ? (mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)') : '';
     return `
     <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
          onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
@@ -1093,7 +1078,6 @@ function runSearch(q, type='auto') {
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlPct!=null?`<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>`:''}
       </div>
       <div style="font-size:var(--text-sm);color:var(--muted);font-family:var(--mono);margin-bottom:var(--sp-1)">${a.sub||''}</div>
       <div style="font-size:var(--text-sm);color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
