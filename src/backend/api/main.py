@@ -27,7 +27,10 @@ from ..core.whitelist import (
     DEFAULT_WHITELIST,
 )
 from ..utils.logging import setup_logging
-from database import service as db
+try:
+    from database import service as db
+except ImportError:
+    from ...database import service as db
 from config import (
     DATA_DIR, LOGS_DIR, CACHE_PATH, DRIFT_LOG, MODEL_PATH, MULTIGNN_MAX_ROWS,
 )
