@@ -577,9 +577,18 @@ async function loadAlertById(id) {
 
   // Route bar
   const route = currentAlert.routeNodes||[];
-  document.getElementById('route-bar').innerHTML = route.map((n,i) =>
+  const getRoleRank = (nId) => {
+    const node = (currentAlert.nodes||[]).find(n => n.id === nId);
+    if (!node) return 1;
+    const r = (node.role||'').toLowerCase();
+    if (r === 'source') return 0;
+    if (r === 'destination') return 2;
+    return 1;
+  };
+  const sortedRoute = [...route].sort((a,b) => getRoleRank(a) - getRoleRank(b));
+  document.getElementById('route-bar').innerHTML = sortedRoute.map((n,i) =>
     `<span class="route-pill" onclick="highlightNode('${n}')" role="button" tabindex="0"
-           onkeydown="if(event.key==='Enter')highlightNode('${n}')">${n}</span>${i<route.length-1?'<span class="route-arrow">→</span>':''}`
+           onkeydown="if(event.key==='Enter')highlightNode('${n}')">${n}</span>${i<sortedRoute.length-1?'<span class="route-arrow">→</span>':''}`
   ).join('');
 
   // Stats strip
@@ -792,11 +801,15 @@ function renderGraph() {
   });
   cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
   cy.on('tap','node', e => highlightNode(e.target.id()));
+  cy.on('tap', e => { if (e.target === cy) resetHighlight(); });
 }
 
 function highlightNode(id) {
   if (!cy) return;
+  const isAlreadyActive = document.querySelector('.route-pill.active-node')?.textContent === id;
   resetHighlight();
+  if (isAlreadyActive) return; // If it was already active, we just reset and we're done
+  
   cy.nodes(`[id="${id}"]`).style({'border-width':4});
   cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
