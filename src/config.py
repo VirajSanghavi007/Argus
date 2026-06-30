@@ -26,4 +26,4 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Pipeline
-MULTIGNN_MAX_ROWS = int(os.getenv("MULTIGNN_MAX_ROWS", "600000"))
+MULTIGNN_MAX_ROWS = int(os.getenv("MULTIGNN_MAX_ROWS", "100000"))
