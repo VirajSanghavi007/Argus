@@ -175,15 +175,15 @@ def _check_drift(ml_scores: list) -> None:
 
         m_mix = 0.5 * (p + q)
         js_nat = 0.5 * float(np.sum(p * np.log(p / m_mix))) + 0.5 * float(np.sum(q * np.log(q / m_mix)))
-        js_div = js_nat / np.log(2)
+        js_div = float(js_nat / np.log(2))
 
         baseline_mean = drift_data.get("baseline_mean", float(np.mean(scores)))
         score_shift = float(np.mean(scores) - baseline_mean)
 
         alert_rate = float(np.mean(scores > DECISION_THRESHOLD))
-        kl_flag = kl_div > 0.1
-        js_flag = js_div > 0.1
-        shift_flag = abs(score_shift) > 0.05
+        kl_flag = bool(kl_div > 0.1)
+        js_flag = bool(js_div > 0.1)
+        shift_flag = bool(abs(score_shift) > 0.05)
         run_entry = {
             "kl_divergence": round(kl_div, 4),
             "js_divergence": round(js_div, 4),
