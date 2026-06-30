@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>AML Intelligence Platform</title>
 <link rel="stylesheet" href="/static/lib/fonts.css"/>
-<link rel="stylesheet" href="/static/css/style.css?v=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css?v=7"/>
 <script src="/static/lib/cytoscape.min.js"></script>
 <script src="/static/lib/chart.umd.min.js"></script>
 <style>nav, main, #tooltip, #toasts { display: none !important; }</style>
@@ -17,7 +20,7 @@
   <div class="auth-bg-grid" aria-hidden="true"></div>
   <div class="auth-card">
     <div class="auth-logo">
-      <img src="/static/public/images.png" alt="Union Bank of India" style="width:80px;height:auto;mix-blend-mode:screen;"/>
+      <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" style="width:200px;height:auto;mix-blend-mode:multiply;"/>
     </div>
     <h1 class="auth-title">AML Intelligence</h1>
     <p class="auth-subtitle">Secure Access Portal</p>
@@ -40,30 +43,7 @@
       <div id="auth-error" class="auth-error" style="display:none"></div>
     </form>
 
-    <!-- Step 2: Auth Code -->
-    <form id="auth-step2" class="auth-form" style="display:none" onsubmit="event.preventDefault();authStep2()">
-      <div class="auth-2fa-header">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <rect x="4" y="14" width="24" height="16" rx="3" stroke="var(--blue)" stroke-width="2"/>
-          <path d="M10 14V10a6 6 0 1112 0v4" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="16" cy="22" r="2" fill="var(--blue)"/>
-        </svg>
-        <span>Two-Factor Authentication</span>
-      </div>
-      <p class="auth-2fa-desc">Enter the 6-digit code sent to your registered device</p>
-      <div class="auth-code-inputs" id="auth-code-inputs">
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="0" autocomplete="off" inputmode="numeric"/>
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="1" autocomplete="off" inputmode="numeric"/>
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="2" autocomplete="off" inputmode="numeric"/>
-        <span class="auth-code-sep">–</span>
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="3" autocomplete="off" inputmode="numeric"/>
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="4" autocomplete="off" inputmode="numeric"/>
-        <input type="text" maxlength="1" class="auth-code-digit" data-idx="5" autocomplete="off" inputmode="numeric"/>
-      </div>
-      <button class="btn btn-blue auth-submit" type="submit">Verify & Continue</button>
-      <div id="auth-error2" class="auth-error" style="display:none"></div>
-      <button type="button" class="auth-back-link" onclick="authBack()">← Back to login</button>
-    </form>
+
 
     <div class="auth-footer">
       <span>🔒 256-bit TLS Encrypted</span>
@@ -76,7 +56,7 @@
 <div id="cinematic-intro" style="display:none">
   <canvas id="cine-canvas" aria-hidden="true"></canvas>
   <div class="cine-content" id="cine-content">
-    <img src="/static/public/images.png" alt="Union Bank of India" class="cine-shield" style="width:100px;height:auto;"/>
+    <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" class="cine-shield" style="width:200px;height:auto;"/>
     <div class="cine-line" id="cine-line"></div>
     <div class="cine-bank-name" id="cine-name">Union Bank of India</div>
     <div class="cine-bank-sub" id="cine-sub">AML Intelligence Platform</div>
@@ -88,7 +68,7 @@
 <div id="loading-overlay" role="status" aria-label="Loading platform" style="display:none">
   <canvas id="load-canvas" aria-hidden="true"></canvas>
   <div class="load-inner">
-    <img src="/static/public/images.png" alt="Union Bank of India" class="load-logo" style="width:100px;height:auto;"/>
+    <img src="/static/public/ubi_logo%20LOGIN.png" alt="Union Bank of India" class="load-logo" style="width:200px;height:auto;"/>
     <div class="load-title">AML Intelligence Platform</div>
     <div class="load-sub">Initializing Secure Environment</div>
     <div class="load-bar-wrap"><div class="load-bar" id="load-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
@@ -118,10 +98,8 @@
   </div>
   <div class="nav-status">
     <span id="nav-user" style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:var(--muted);margin-right:var(--sp-2);display:none"></span>
-    <div class="status-dot loading" id="status-dot" aria-hidden="true"></div>
-    <span class="status-label" id="status-label" role="status">Loading...</span>
     <button id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode" aria-label="Toggle dark mode" style="
-      margin-left:var(--sp-2);background:none;border:1px solid var(--border);border-radius:var(--r);
+      background:none;border:1px solid var(--border);border-radius:var(--r);
       padding:var(--sp-1) var(--sp-2);cursor:pointer;font-size:var(--text-base);color:var(--muted);line-height:1;
       transition:all .15s ease;flex-shrink:0">☀️</button>
   </div>
@@ -205,9 +183,9 @@
       <div class="tl-header">
         <span class="tl-counter" id="tl-counter">— / —</span>
         <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev <span class="kbd-hint">←</span></button>
-          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play <span class="kbd-hint">Space</span></button>
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶ <span class="kbd-hint">→</span></button>
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev</button>
+          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play</button>
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶</button>
         </div>
       </div>
       <div class="tl-card" id="tl-card"><span style="color:var(--light);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span></div>
@@ -222,9 +200,9 @@
     <div class="ir-sec">
       <span class="label-up">Decision</span>
       <div class="dec-btns" role="group" aria-label="Decision actions">
-        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span class="kbd-hint">C</span></button>
-        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span class="kbd-hint">R</span></button>
-        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span class="kbd-hint">D</span></button>
+        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
+        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
+        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
       </div>
       <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…" aria-label="Decision reason"></textarea>
       <div id="dec-status-box" style="display:none" role="status"></div>
@@ -335,6 +313,6 @@
 </div>
 <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-<script src="/static/js/app.js?v=1"></script>
+<script src="/static/js/app.js?v=10"></script>
 </body>
 </html>

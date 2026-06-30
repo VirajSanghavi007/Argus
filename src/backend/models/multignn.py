@@ -68,6 +68,11 @@ try:
     from torch_geometric.nn import GINEConv, PNAConv
     HAS_TORCH = True
 except ImportError:  # pragma: no cover - guarded for torch-less environments
+    import types as _types
+    # Stub nn so class MultiGNN(nn.Module) doesn't crash at import time
+    nn = _types.SimpleNamespace(Module=object, Linear=None, Embedding=None,
+                                Sequential=None, Dropout=None, BatchNorm1d=None,
+                                ModuleList=None, ReLU=None)
     HAS_TORCH = False
     logger.warning("PyTorch / PyTorch Geometric not available — Multi-GNN disabled.")
 

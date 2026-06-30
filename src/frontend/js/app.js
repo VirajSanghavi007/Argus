@@ -8,7 +8,7 @@ document.title = 'AML Intelligence Platform';
 ════════════════════════════════════════════ */
 let authUser = null;
 
-function authStep1() {
+async function authStep1() {
   const companyId = document.getElementById('auth-company-id').value.trim();
   const name      = document.getElementById('auth-name').value.trim();
   const password  = document.getElementById('auth-password').value;
@@ -17,35 +17,29 @@ function authStep1() {
     showAuthError('auth-error', 'All fields are required');
     return;
   }
-  if (password.length < 4) {
-    showAuthError('auth-error', 'Invalid credentials');
-    return;
+
+  const btn = document.querySelector('#auth-screen button');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId, username: name, password }),
+    });
+    if (!res.ok) {
+      showAuthError('auth-error', 'Invalid credentials');
+      return;
+    }
+    const data = await res.json();
+    sessionStorage.setItem('session_token', data.token);
+    authUser = { companyId: data.company_id, name: data.username, token: data.token };
+    completeAuth();
+  } catch (e) {
+    showAuthError('auth-error', 'Connection error — try again');
+  } finally {
+    if (btn) btn.disabled = false;
   }
-
-  authUser = { companyId, name };
-  document.getElementById('auth-step1').style.display = 'none';
-  document.getElementById('auth-step2').style.display = 'flex';
-  document.querySelector('.auth-code-digit').focus();
-}
-
-function authStep2() {
-  const digits = [...document.querySelectorAll('.auth-code-digit')].map(d => d.value);
-  const code = digits.join('');
-
-  if (code.length !== 6) {
-    showAuthError('auth-error2', 'Enter all 6 digits');
-    return;
-  }
-
-  // Accept any 6-digit code for demo
-  completeAuth();
-}
-
-function authBack() {
-  document.getElementById('auth-step2').style.display = 'none';
-  document.getElementById('auth-step1').style.display = 'flex';
-  document.getElementById('auth-error2').style.display = 'none';
-  document.querySelectorAll('.auth-code-digit').forEach(d => d.value = '');
 }
 
 function showAuthError(id, msg) {
@@ -54,26 +48,6 @@ function showAuthError(id, msg) {
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 3000);
 }
-
-// Auto-advance code digit inputs
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.auth-code-digit').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const v = e.target.value.replace(/\D/g, '');
-      e.target.value = v;
-      if (v && e.target.dataset.idx < 5) {
-        const next = document.querySelector(`.auth-code-digit[data-idx="${+e.target.dataset.idx + 1}"]`);
-        if (next) next.focus();
-      }
-    });
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Backspace' && !e.target.value && e.target.dataset.idx > 0) {
-        const prev = document.querySelector(`.auth-code-digit[data-idx="${+e.target.dataset.idx - 1}"]`);
-        if (prev) { prev.focus(); prev.value = ''; }
-      }
-    });
-  });
-});
 
 function completeAuth() {
   const screen = document.getElementById('auth-screen');
@@ -147,47 +121,45 @@ function playCinematicIntro() {
   const tagline = document.getElementById('cine-tagline');
 
   // Fade in content container
-  setTimeout(() => { content.style.transition = 'opacity .8s ease'; content.style.opacity = '1'; }, 200);
+  setTimeout(() => { content.style.transition = 'opacity .4s ease'; content.style.opacity = '1'; }, 100);
 
   // Shield scales in
   setTimeout(() => {
-    shield.style.transition = 'opacity 1s ease, transform 1s ease';
+    shield.style.transition = 'opacity .4s ease, transform .4s ease';
     shield.style.opacity = '1'; shield.style.transform = 'scale(1)';
-  }, 400);
+  }, 150);
 
   // Red-blue line extends
-  setTimeout(() => { line.style.width = '280px'; }, 1000);
+  setTimeout(() => { line.style.width = '280px'; }, 400);
 
   // Bank name types in
   setTimeout(() => {
-    name.style.transition = 'opacity .8s ease, transform .8s ease';
+    name.style.transition = 'opacity .3s ease, transform .3s ease';
     name.style.opacity = '1'; name.style.transform = 'translateY(0)';
-  }, 1200);
+  }, 500);
 
   // Sub text
   setTimeout(() => {
-    sub.style.transition = 'opacity .6s ease, transform .6s ease';
+    sub.style.transition = 'opacity .3s ease, transform .3s ease';
     sub.style.opacity = '1'; sub.style.transform = 'translateY(0)';
-  }, 1800);
+  }, 700);
 
   // Tagline
   setTimeout(() => {
-    tagline.style.transition = 'opacity .6s ease';
+    tagline.style.transition = 'opacity .3s ease';
     tagline.style.opacity = '1';
-  }, 2400);
+  }, 900);
 
   // Hold for a beat, then fade out → loading screen
   setTimeout(() => {
     cancelAnimationFrame(cineFrame);
-    intro.style.transition = 'opacity .8s ease';
+    intro.style.transition = 'opacity .4s ease';
     intro.style.opacity = '0';
     setTimeout(() => {
       intro.style.display = 'none';
-      document.getElementById('loading-overlay').style.display = 'flex';
-      startLoadingAnimation();
       init();
-    }, 800);
-  }, 4200);
+    }, 400);
+  }, 1500);
 }
 
 /* ════════════════════════════════════════════
@@ -277,6 +249,14 @@ const API_BASE = (window.location.protocol === 'file:')
   ? 'http://localhost:8000'
   : '';
 
+function apiFetch(url, opts = {}) {
+  const token = (authUser && authUser.token) || sessionStorage.getItem('session_token');
+  if (token) {
+    opts.headers = { ...(opts.headers || {}), 'X-Session-Token': token };
+  }
+  return fetch(url, opts);
+}
+
 /* ── Pattern formatting ── */
 function formatPatternName(pt) {
   const map = {
@@ -320,7 +300,7 @@ let dbCharts     = {};
 ════════════════════════════════════════════ */
 const STAGES = ['ls-0','ls-1','ls-2','ls-3','ls-4'];
 const BAR_PCTS = [10, 30, 60, 85, 100];
-const STAGE_DELAYS = [0, 1500, 3000, 4800, 6500];
+const STAGE_DELAYS = [0, 300, 600, 900, 1200];
 
 function setStage(idx) {
   STAGES.forEach((id, i) => {
@@ -335,18 +315,9 @@ function setStage(idx) {
 }
 
 async function init() {
-  const t0 = Date.now();
-  setStage(0);
   await pollUntilReady();
-
-  const minWait = s => Math.max(0, STAGE_DELAYS[s] - (Date.now() - t0));
-  await sleep(minWait(1)); setStage(1);
-  await sleep(minWait(2)); setStage(2);
-  await sleep(minWait(3)); setStage(3);
   await loadAllAlerts();
-  await sleep(minWait(4)); setStage(4);
-  await sleep(400);
-  stopLoadingAnimation();
+
   // Reveal nav/main hidden by inline style to prevent dashboard flash
   const hideStyle = document.querySelector('style');
   if (hideStyle && hideStyle.textContent.includes('display: none !important')) hideStyle.remove();
@@ -367,35 +338,36 @@ async function init() {
 
 async function pollUntilReady() {
   let lastCount = 0;
+  const statusDot = document.getElementById('status-dot');
+  const statusLabel = document.getElementById('status-label');
   while (true) {
     try {
-      const r = await fetch(`${API_BASE}/status`).catch(() => null);
+      const r = await apiFetch(`${API_BASE}/status`).catch(() => null);
       if (r && r.ok) {
         const d = await r.json();
         setStage(d.alert_count > 0 ? (d.alert_count !== lastCount ? 2 : 1) : 1);
         lastCount = d.alert_count;
         if (d.status === 'error') {
-          document.getElementById('status-dot').className = 'status-dot' ;
-          document.getElementById('status-dot').style.background = 'var(--red)';
-          document.getElementById('status-label').textContent = 'Pipeline error';
+          if (statusDot) { statusDot.className = 'status-dot'; statusDot.style.background = 'var(--red)'; }
+          if (statusLabel) statusLabel.textContent = 'Pipeline error';
           document.querySelector('.load-sub').textContent = d.error || 'Pipeline failed to start.';
           document.querySelector('.load-sub').style.color = 'var(--red)';
           return d;
         }
         if (d.status === 'ready') {
-          document.getElementById('status-dot').className = 'status-dot ready';
-          document.getElementById('status-label').textContent =
+          if (statusDot) statusDot.className = 'status-dot ready';
+          if (statusLabel) statusLabel.textContent =
             `Live · ${d.alert_count} alerts | L:${d.labelled_count} U:${d.unlabelled_count} ∩:${d.overlap_count}`;
           return d;
         }
       }
     } catch(e) {}
-    await sleep(3000);
+    await sleep(1000);
   }
 }
 
 async function loadAllAlerts() {
-  const r = await fetch(`${API_BASE}/alerts`);
+  const r = await apiFetch(`${API_BASE}/alerts`);
   allAlerts = await r.json();
   await loadDecisions();
 }
@@ -403,7 +375,7 @@ async function loadAllAlerts() {
 // Hydrate analyst decisions from the persistent audit log so they survive restarts.
 async function loadDecisions() {
   try {
-    const r = await fetch(`${API_BASE}/decisions`);
+    const r = await apiFetch(`${API_BASE}/decisions`);
     if (r.ok) decisions = await r.json();
   } catch (e) { /* non-fatal — decisions stay empty */ }
 }
@@ -581,12 +553,6 @@ function renderSidebar() {
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
-    const conf   = Math.round((a.confidence||0)*100);
-    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
-    const mlBg  = mlPct>=70 ? 'var(--red-bg)'   : mlPct>=40 ? 'var(--amber-bg)'  : 'var(--green-bg)';
-    const mlClr = mlPct>=70 ? 'var(--red)'      : mlPct>=40 ? 'var(--amber)'     : 'var(--green)';
-    const mlBd  = mlPct>=70 ? 'var(--red-bd)'   : mlPct>=40 ? 'var(--amber-bd)'  : 'var(--green-bd)';
-    const mlBadge = mlPct != null ? `<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>` : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
@@ -595,9 +561,7 @@ function renderSidebar() {
       <div class="ac-badges">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlBadge}
       </div>
-      <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%"></div></div>
       <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
     </div>`;
   }).join('');
@@ -609,7 +573,7 @@ function renderSidebar() {
 async function loadAlertById(id) {
   if (!alertDetails[id]) {
     try {
-      const r = await fetch(`${API_BASE}/alerts/${id}`);
+      const r = await apiFetch(`${API_BASE}/alerts/${id}`);
       if (!r.ok) return;
       alertDetails[id] = await r.json();
       renderDashboard();
@@ -635,7 +599,7 @@ async function loadAlertById(id) {
   document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
   document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
   document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = `${Math.round((currentAlert.confidence||0)*100)}%`;
+  document.getElementById('is-conf').textContent  = currentAlert.confidence != null ? `${Math.round(currentAlert.confidence*100)}%` : '—';
   document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
 
   renderGraph();
@@ -747,9 +711,28 @@ function renderGraph() {
   if (cy) cy.destroy();
 
   const elements = [];
+  // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
+  let intermediaryIdx = 0;
+  const intermediaryNodes = currentAlert.nodes.filter(n => {
+    const r = (n.role||'').toLowerCase();
+    return r !== 'source' && r !== 'destination';
+  });
+  const needsNumbering = intermediaryNodes.length > 1;
+
   currentAlert.nodes.forEach(n => {
     const c = SEV_NODE[n.sev]||SEV_NODE.low;
-    elements.push({ data:{ id:n.id, label:n.id, sev:n.sev, role:n.role,
+    const r = (n.role||'').toLowerCase();
+    let shortLabel;
+    if (r === 'source') {
+      shortLabel = 'S';
+    } else if (r === 'destination') {
+      shortLabel = 'D';
+    } else {
+      // intermediary, distributor, coordinator, hub, etc.
+      shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
+      intermediaryIdx++;
+    }
+    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
       bank:n.bank, vol:n.vol, txn:n.txn }, style:{
       'background-color':c.bg, 'border-color':c.border,
     }});
@@ -769,7 +752,7 @@ function renderGraph() {
         'background-color':'data(background-color)',
         'border-color':'data(border-color)',
         'border-width':2, 'color':'#0F172A',
-        'font-size':9, 'font-family':'DM Mono, monospace',
+        'font-size':9, 'font-family':'Poppins, sans-serif',
         'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
       }},
       { selector:'edge', style:{
@@ -818,7 +801,7 @@ function renderGraph() {
     tt.style.display='block';
     document.getElementById('tt-id').textContent   = `${edgeData.source} → ${edgeData.target}`;
     document.getElementById('tt-bank').textContent = edgeData.label||'—';
-    document.getElementById('tt-role').textContent = `Importance: ${Math.round(edgeData.importance * 100)}%`;
+    document.getElementById('tt-role').textContent = '';
     document.getElementById('tt-vol').textContent  = '—';
     document.getElementById('tt-txn').textContent  = '—';
   });
@@ -874,7 +857,6 @@ function applyStep(idx) {
       <span>Recv: <strong>${tx.recv}</strong></span>
       <span>${tx.fromBank} → ${tx.toBank}</span>
       <span>${tx.ts||'—'}</span>
-      <span style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:${impColor};font-weight:500">🔍 ML Importance: ${Math.round(imp*100)}%</span>
     </div>`;
   if (cy) {
     cy.edges().removeClass('hl-edge');
@@ -983,7 +965,7 @@ async function postDecision(decision) {
   if (!currentAlert) return;
   const reason = document.getElementById('dec-reason').value||'';
   try {
-    const r = await fetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
+    const r = await apiFetch(`${API_BASE}/alerts/${currentAlert.id}/decision`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({decision,reason})
     });
@@ -1136,7 +1118,7 @@ function runSearch(q, type='auto') {
 ════════════════════════════════════════════ */
 async function loadValidation() {
   try {
-    const r=await fetch(`${API_BASE}/validation`);
+    const r=await apiFetch(`${API_BASE}/validation`);
     if (!r.ok) {
       document.getElementById('val-compare-body').innerHTML=
         `<tr><td colspan="5" style="color:var(--red);padding:var(--sp-4)">Run validator.py first to generate validation data.</td></tr>`;
@@ -1241,7 +1223,7 @@ async function addWhitelistAccount() {
   if (!id) { toast('Enter an account ID','warning'); return; }
   const reason=(document.getElementById('wl-reason-inp').value||'').trim();
   try {
-    const r=await fetch(`${API_BASE}/whitelist/account`,{
+    const r=await apiFetch(`${API_BASE}/whitelist/account`,{
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({account_id:id,reason})
     });
@@ -1255,7 +1237,7 @@ async function addWhitelistAccount() {
 
 async function removeWhitelistAccount(id) {
   try {
-    await fetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
+    await apiFetch(`${API_BASE}/whitelist/account/${encodeURIComponent(id)}`,{method:'DELETE'});
     await loadWhitelist();
     toast(`Removed ${id} from whitelist`,'success');
   } catch(e){ toast('Error removing from whitelist','error'); }
@@ -1278,49 +1260,20 @@ function toast(msg, type='info') {
   setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },3000);
 }
 
-/* ════════════════════════════════════════════
-   KEYBOARD SHORTCUTS (Investigate view)
-════════════════════════════════════════════ */
+
 document.addEventListener('keydown', e => {
-  // Don't fire shortcuts when typing in inputs
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
   const investigateActive = document.getElementById('view-investigate')?.classList.contains('active');
-
   if (investigateActive && currentAlert) {
     switch(e.key.toLowerCase()) {
-      case 'j': // Next alert
-        e.preventDefault();
-        navigateAlert(1);
-        break;
-      case 'k': // Previous alert
-        e.preventDefault();
-        navigateAlert(-1);
-        break;
-      case 'c': // Confirm
-        e.preventDefault();
-        postDecision('confirm');
-        break;
-      case 'r': // Review
-        e.preventDefault();
-        postDecision('review');
-        break;
-      case 'd': // Dismiss
-        e.preventDefault();
-        postDecision('dismiss');
-        break;
-      case 'arrowleft': // Prev transaction
-        e.preventDefault();
-        stepBy(-1);
-        break;
-      case 'arrowright': // Next transaction
-        e.preventDefault();
-        stepBy(1);
-        break;
-      case ' ': // Play/pause timeline
-        e.preventDefault();
-        tlPlay();
-        break;
+      case 'c': e.preventDefault(); postDecision('confirm'); break;
+      case 'r': e.preventDefault(); postDecision('review'); break;
+      case 'd': e.preventDefault(); postDecision('dismiss'); break;
+      case 'j': e.preventDefault(); navigateAlert(1); break;
+      case 'k': e.preventDefault(); navigateAlert(-1); break;
+      case 'arrowleft': e.preventDefault(); stepBy(-1); break;
+      case 'arrowright': e.preventDefault(); stepBy(1); break;
+      case ' ': e.preventDefault(); tlPlay(); break;
     }
   }
 });

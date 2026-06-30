@@ -25,6 +25,25 @@ CREATE TABLE IF NOT EXISTS decisions (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role       TEXT DEFAULT 'analyst',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(company_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_id TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_decisions_alert ON decisions(alert_id);
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON decisions(created_at DESC);
@@ -33,3 +52,5 @@ CREATE INDEX IF NOT EXISTS idx_alerts_pattern  ON alerts(pattern_type);
 CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
 CREATE INDEX IF NOT EXISTS idx_alerts_source ON alerts(source);
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

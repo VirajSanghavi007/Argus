@@ -261,7 +261,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         "ml_score_rf":  None,
         "ml_score_gnn": round(cluster_prob, 4),
         "risk_flagged": True,
-        "time_span":    f"{span_h:.1f}h",
+        "time_span":    min(ts).strftime("%Y-%m-%d %H:%M") if ts else "",
         "hops":         len(edge_data),
         "total_moved":  float(sum(amounts)),
         "route_nodes":  [label.get(n, n) for n in comp],

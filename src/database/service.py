@@ -12,10 +12,14 @@ TODO: PostgreSQL migration for production
      DATETIME DEFAULT CURRENT_TIMESTAMP → TIMESTAMPTZ DEFAULT NOW()
 """
 
+import hashlib
 import json
 import logging
+import os
+import secrets
 import sqlite3
 import threading
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -143,6 +147,75 @@ def decision_history(alert_id: str) -> list[dict]:
             (alert_id,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Auth ────────────────────────────────────────────────────────────────────
+
+_SESSION_TTL_HOURS = 8
+
+
+def _hash_password(password: str) -> str:
+    salt = os.environ.get("ARGUS_SECRET", "argus-aml-2026")
+    return hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+
+
+def seed_default_users() -> None:
+    conn = _require_conn()
+    defaults = [
+        ("UBI-AML-2026", "admin", "admin123"),
+        ("UBI-AML-2026", "analyst1", "analyst2026"),
+        ("UBI-AML-2026", "demo", "demo2026"),
+    ]
+    with _lock:
+        for company_id, username, password in defaults:
+            pw_hash = _hash_password(password)
+            conn.execute(
+                "INSERT OR IGNORE INTO users (company_id, username, password_hash) VALUES (?,?,?)",
+                (company_id, username, pw_hash),
+            )
+        conn.commit()
+
+
+def verify_user(company_id: str, username: str, password: str) -> dict | None:
+    conn = _require_conn()
+    pw_hash = _hash_password(password)
+    with _lock:
+        row = conn.execute(
+            "SELECT id, company_id, username, role FROM users WHERE company_id=? AND username=? AND password_hash=?",
+            (company_id, username, pw_hash),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_session(user_id: int, company_id: str, username: str) -> str:
+    conn = _require_conn()
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(hours=_SESSION_TTL_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _lock:
+        conn.execute(
+            "INSERT INTO sessions (token, user_id, company_id, username, expires_at) VALUES (?,?,?,?,?)",
+            (token, user_id, company_id, username, expires),
+        )
+        conn.commit()
+    return token
+
+
+def validate_session(token: str) -> dict | None:
+    conn = _require_conn()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with _lock:
+        row = conn.execute(
+            "SELECT user_id, company_id, username FROM sessions WHERE token=? AND expires_at > ?",
+            (token, now),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_session(token: str) -> None:
+    conn = _require_conn()
+    with _lock:
+        conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+        conn.commit()
 
 
 def decision_counts() -> dict:

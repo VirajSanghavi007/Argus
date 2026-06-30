@@ -1,4 +1,4 @@
-# UNAUTHENTICATED — do not expose publicly without adding auth
+# Auth-protected. See /auth/login to obtain a session token.
 import asyncio
 import json
 import threading
@@ -270,6 +270,7 @@ async def lifespan(app: FastAPI):
     """Startup and graceful shutdown logic."""
     _ensure_data_dir()
     db.init_db()
+    db.seed_default_users()
     log_paths = setup_logging(LOGS_DIR)
     logger.info(f"Error logs -> {log_paths['error_logs']}")
     logger.info(f"Training logs -> {log_paths['training_logs']}")
@@ -312,6 +313,66 @@ async def add_request_context(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
     return response
+
+
+# ── Auth Endpoints ──────────────────────────────────────────────────────────
+
+_AUTH_EXEMPT = {"/health", "/status", "/auth/login", "/"}
+
+_AUTH_EXEMPT_PREFIXES = ("/static/",)
+
+
+def _get_session(request: Request) -> dict | None:
+    token = request.headers.get("X-Session-Token") or request.cookies.get("session_token")
+    if not token:
+        return None
+    return db.validate_session(token)
+
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    path = request.url.path
+    if path in _AUTH_EXEMPT or any(path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
+        return await call_next(request)
+    session = _get_session(request)
+    if not session:
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+class LoginRequest(BaseModel):
+    company_id: str
+    username: str
+    password: str
+
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest):
+    user = db.verify_user(req.company_id, req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = db.create_session(user["id"], user["company_id"], user["username"])
+    response = JSONResponse({"token": token, "username": user["username"], "company_id": user["company_id"]})
+    response.set_cookie("session_token", token, httponly=True, samesite="lax", max_age=28800)
+    return response
+
+
+@app.post("/auth/logout")
+def auth_logout(request: Request):
+    token = request.headers.get("X-Session-Token") or request.cookies.get("session_token")
+    if token:
+        db.delete_session(token)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("session_token")
+    return response
+
+
+@app.get("/auth/me")
+def auth_me(request: Request):
+    session = _get_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"username": session["username"], "company_id": session["company_id"]}
 
 
 FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
