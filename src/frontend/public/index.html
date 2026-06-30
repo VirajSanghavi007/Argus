@@ -156,6 +156,13 @@
               <span id="dark-toggle-label">Light</span>
             </button>
           </div>
+          <!-- Help & Guide -->
+          <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+            <button onclick="openHelp()" aria-label="Open help and guide" style="
+              width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+              padding:8px 12px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;
+              color:var(--text);line-height:1;transition:all .15s ease">📖 Help &amp; Guide</button>
+          </div>
           <!-- Logout -->
           <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
             <button onclick="logout()" aria-label="Log out" style="
@@ -200,6 +207,12 @@
           <h3>Most Involved Banks</h3>
           <div class="chart-wrap"><canvas id="chart-banks" aria-label="Bar chart showing most involved banks"></canvas>
           </div>
+        </div>
+      </div>
+      <div class="db-chart-card" style="margin-top:var(--sp-4)">
+        <h3 title="Accounts ranked by the strongest laundering signal on any transaction they touch">Top Risky Accounts</h3>
+        <div class="risky-acct-list" id="risky-accounts">
+          <div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm);padding:var(--sp-2)">Loading…</div>
         </div>
       </div>
       <div class="timeline-card">
@@ -255,9 +268,14 @@
             </select>
           </div>
         </div>
-        <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3)">
-          <button class="sort-pill active" id="sort-recent" onclick="setSortOrder('recent',this)">Recent</button>
-          <button class="sort-pill" id="sort-older" onclick="setSortOrder('older',this)">Older</button>
+        <div style="display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3)">
+          <span class="label-up" style="margin:0;white-space:nowrap" title="Order the list by the model's laundering-risk score">Sort by risk</span>
+          <div style="display:flex;gap:var(--sp-2);flex:1">
+            <button class="sort-pill active" id="sort-recent" style="flex:1" onclick="setSortOrder('recent',this)"
+              aria-label="Sort by highest risk first" title="Highest-confidence alerts first">Highest</button>
+            <button class="sort-pill" id="sort-older" style="flex:1" onclick="setSortOrder('older',this)"
+              aria-label="Sort by lowest risk first" title="Lowest-confidence alerts first">Lowest</button>
+          </div>
         </div>
         <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
       </div>
@@ -307,6 +325,7 @@
       </div>
 
       <div class="inv-right">
+        <div class="ir-sec" id="ir-node-sec" style="display:none"></div>
         <div class="ir-sec" id="ir-pattern-sec">
         </div>
         <div class="ir-sec" id="ir-source-sec" style="display:none"></div>
@@ -487,17 +506,65 @@
 
   </main>
 
+  <!-- ═══ HELP & GUIDE MODAL ═══ -->
+  <div id="help-overlay" onclick="if(event.target===this)closeHelp()" style="display:none;position:fixed;inset:0;
+    background:rgba(15,23,42,.6);z-index:10000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto">
+    <div role="dialog" aria-label="Help and guide" style="background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;max-width:760px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.35)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);border-radius:12px 12px 0 0">
+        <h2 style="margin:0;font-family:var(--sans);font-size:20px;font-weight:800;color:var(--text)">📖 Help &amp; Guide</h2>
+        <button onclick="closeHelp()" aria-label="Close help" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;padding:4px 10px;font-size:16px;line-height:1">✕</button>
+      </div>
+      <div id="help-body" style="padding:24px;font-family:var(--sans);font-size:14px;line-height:1.6;color:var(--text)">
+        <p style="margin-top:0;color:var(--muted)">New to anti-money-laundering (AML)? Start here. No finance background needed.</p>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">What is money laundering?</h3>
+        <p style="margin:0">Criminals earn “dirty” money (from fraud, drugs, scams) and need to make it look like it came from a legitimate source. They do this by moving it through many bank accounts in confusing ways so investigators lose the trail. <strong>Argus is the system that spots those suspicious money movements.</strong></p>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">How does Argus decide what’s suspicious?</h3>
+        <p style="margin:0 0 8px">Every money transfer between two accounts is a <strong>transaction</strong>. Argus draws all of them as a network (a <strong>graph</strong>): each account is a dot (<strong>node</strong>) and each transfer is an arrow (<strong>edge</strong>). An AI model (a Graph Neural Network) gives every transfer a <strong>laundering-risk score</strong>. The highest-risk transfers get grouped into an <strong>alert</strong> you can investigate.</p>
+        <p style="margin:0">We only raise an alert when at least <strong>3 accounts</strong> are involved — a single A→B payment is just a payment; laundering needs a chain.</p>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">The laundering shapes (patterns)</h3>
+        <ul style="margin:0;padding-left:18px">
+          <li><strong>Fan-Out</strong> — one account sprays money to many (splitting cash up to hide it).</li>
+          <li><strong>Fan-In</strong> — many accounts funnel money into one (collecting it back together).</li>
+          <li><strong>Cycle</strong> — money travels in a loop back to where it started (no real business reason).</li>
+          <li><strong>Scatter-Gather / Gather-Scatter</strong> — money fans out through middlemen then regroups (adding layers).</li>
+          <li><strong>Bipartite / Complex</strong> — denser webs of transfers between groups.</li>
+        </ul>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">Reading an alert — the red flags</h3>
+        <p style="margin:0">Topology alone isn’t proof (real businesses also fan money in and out). So each alert lists the <em>specific</em> behaviours that separate laundering from normal trade: <strong>structuring</strong> (many near-identical amounts to stay under reporting limits), <strong>pass-through “mules”</strong> (an account that forwards ~100% of what it receives), <strong>velocity</strong> (money racing through many hands in hours), <strong>cross-currency hops</strong>, and <strong>off-hours timing</strong>. It’s the <strong>combination</strong> of signals that matters.</p>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">Using the app, tab by tab</h3>
+        <ul style="margin:0;padding-left:18px">
+          <li><strong>Dashboard</strong> — the big picture: total alerts, money flagged, pattern mix, most-involved banks, and <strong>Top Risky Accounts</strong> (click one to investigate it).</li>
+          <li><strong>Investigate</strong> — pick an alert from the left list (sort by <strong>Highest / Lowest</strong> risk), see its network graph, step through each transfer, read the evidence, and click <strong>Confirm / Review / Dismiss</strong>. <strong>Click any node (dot)</strong> to see that account’s full transaction history and its risk score.</li>
+          <li><strong>Case Manager</strong> — every decision you’ve made, as an audit trail.</li>
+          <li><strong>Whitelist</strong> — mark trusted accounts (e.g. payroll) so they stop generating alerts.</li>
+          <li><strong>Predict</strong> — upload your own CSV/Excel of transactions and have the model score them on demand.</li>
+        </ul>
+
+        <h3 style="font-size:15px;margin:20px 0 6px">How banks fight this today</h3>
+        <p style="margin:0 0 16px">Traditional systems use fixed rules (“flag anything over $10,000”) and file Suspicious Activity Reports (SARs). Criminals dodge fixed thresholds easily. Argus adds an AI layer that learns laundering <em>behaviour</em> across the whole network, so it catches patterns rules miss — while still letting a human analyst make the final call.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Tooltip -->
   <div id="tooltip" role="tooltip">
     <div class="tt-id" id="tt-id"></div>
     <div class="tt-row"><span>Bank</span><span id="tt-bank"></span></div>
     <div class="tt-row"><span>Role</span><span id="tt-role"></span></div>
+    <div class="tt-row"><span>Account risk</span><span id="tt-risk"></span></div>
     <div class="tt-row"><span>Volume</span><span id="tt-vol"></span></div>
     <div class="tt-row"><span>Txns</span><span id="tt-txn"></span></div>
+    <div class="tt-hint" style="margin-top:6px;font-size:9px;color:var(--muted)">Click node → full transaction history</div>
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=14"></script>
+  <script src="/static/js/app.js?v=15"></script>
 </body>
 
 </html>

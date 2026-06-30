@@ -547,6 +547,18 @@ function toggleSettings() {
   p.style.display = open ? 'none' : 'block';
 }
 
+function openHelp() {
+  const pop = document.getElementById('settings-popover');
+  if (pop) pop.style.display = 'none';
+  const o = document.getElementById('help-overlay');
+  if (o) o.style.display = 'flex';
+}
+function closeHelp() {
+  const o = document.getElementById('help-overlay');
+  if (o) o.style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
 async function logout() {
   try {
     await apiFetch('/auth/logout', { method: 'POST',
@@ -657,6 +669,54 @@ function renderDashboard() {
   document.getElementById('dc-review').textContent  = cnt.review;
   document.getElementById('dc-dismiss').textContent = cnt.dismiss;
   document.getElementById('dc-pending').textContent = allAlerts.length - Object.keys(decisions).length;
+
+  renderRiskyAccounts();
+}
+
+/* ════════════════════════════════════════════
+   TOP RISKY ACCOUNTS (node-level risk)
+════════════════════════════════════════════ */
+async function renderRiskyAccounts() {
+  const el = document.getElementById('risky-accounts');
+  if (!el) return;
+  try {
+    const r = await apiFetch('/accounts/risky?limit=8');
+    if (!r.ok) { el.innerHTML = ''; return; }
+    const rows = await r.json();
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm);padding:var(--sp-2)">No accounts yet</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(a => {
+      const pct = Math.round((a.risk_score||0) * 100);
+      const tier = pct >= 75 ? 'var(--red,#DA251C)' : pct >= 50 ? '#F59E0B' : 'var(--blue)';
+      return `<div class="risky-acct-row" role="button" tabindex="0"
+                onclick="jumpToAccount('${a.account_id}')" onkeydown="if(event.key==='Enter')jumpToAccount('${a.account_id}')"
+                style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-2);border-bottom:1px solid var(--border);cursor:pointer">
+        <div style="font-family:var(--mono);font-weight:700;color:var(--text);min-width:90px">${a.account_id}</div>
+        <div style="flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${tier}"></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:var(--text-sm);font-weight:700;color:${tier};min-width:38px;text-align:right">${pct}%</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);min-width:90px;text-align:right">${fmtMoney(a.total_moved)} · ${a.txn_count} tx</div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = ''; }
+}
+
+// Open Investigate on the first alert that contains this account, then drill into the node
+async function jumpToAccount(acctId) {
+  const hit = allAlerts.find(a => {
+    const det = alertDetails[a.id];
+    return det && (det.nodes||[]).some(n => n.id === acctId);
+  });
+  showView('investigate');
+  if (hit) {
+    await loadAlertById(hit.id);
+    setTimeout(() => openNodePanel(acctId), 200);
+  } else {
+    openNodePanel(acctId);
+  }
 }
 
 function renderActivityChart() {
@@ -1060,6 +1120,7 @@ function renderGraph() {
     document.getElementById('tt-id').textContent   = n.id;
     document.getElementById('tt-bank').textContent = getBankName(n.bank)||'—';
     document.getElementById('tt-role').textContent = n.role||'—';
+    document.getElementById('tt-risk').textContent = `${Math.round(nodeRiskFromAlert(n.id)*100)}%`;
     document.getElementById('tt-vol').textContent  = n.vol||'—';
     document.getElementById('tt-txn').textContent  = n.txn||'—';
   });
@@ -1079,7 +1140,7 @@ function renderGraph() {
     document.getElementById('tt-txn').textContent  = '—';
   });
   cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
-  cy.on('tap','node', e => highlightNode(e.target.id()));
+  cy.on('tap','node', e => { const id = e.target.id(); highlightNode(id); openNodePanel(id); });
   // Tap on background → reset highlight and fit view
   cy.on('tap', e => { if (e.target === cy) { resetHighlight(); cy.fit(undefined, 40); } });
   // Always fit the graph to the container once the layout settles (kills whitespace)
@@ -1101,6 +1162,82 @@ function resetHighlight() {
   cy.elements().removeClass('dim hl-edge');
   cy.nodes().style({'border-width': 2});
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
+}
+
+/* ════════════════════════════════════════════
+   NODE DRILL-DOWN — per-account risk + history
+════════════════════════════════════════════ */
+// Account risk within the CURRENT alert = strongest edge importance touching it.
+function nodeRiskFromAlert(id) {
+  const edges = currentAlert?.edges || [];
+  let mx = 0;
+  edges.forEach(e => { if (e.source===id || e.target===id) mx = Math.max(mx, e.importance||0); });
+  return mx;
+}
+
+async function openNodePanel(id) {
+  const sec = document.getElementById('ir-node-sec');
+  if (!sec) return;
+  sec.style.display = 'block';
+  sec.innerHTML = `<div style="font-family:var(--mono);color:var(--muted);font-size:var(--text-sm)">Loading ${id}…</div>`;
+  let d = null;
+  try {
+    const r = await apiFetch(`/account/${encodeURIComponent(id)}/history`);
+    if (r.ok) d = await r.json();
+  } catch(e) { /* fall back to current-alert view below */ }
+
+  // Fallback: build from the current alert if the endpoint is unavailable
+  if (!d) {
+    const txns = (currentAlert?.transactions||[]).filter(t => t.from===id || t.to===id).map(t => ({
+      alert_id: currentAlert.id, direction: t.from===id?'out':'in',
+      counterparty: t.from===id?t.to:t.from, amount: t.paid, format: t.fmt,
+      from_bank: t.fromBank, to_bank: t.toBank, timestamp: t.ts,
+    }));
+    d = { account_id:id, risk_score:nodeRiskFromAlert(id), txn_count:txns.length, alert_count:1, transactions:txns,
+          sent_total:0, recv_total:0, banks:[] };
+  }
+
+  const pct = Math.round((d.risk_score||0)*100);
+  const tier = pct>=75?'var(--red,#DA251C)':pct>=50?'#F59E0B':'var(--blue)';
+  const rows = (d.transactions||[]).slice(0,40).map(t => `
+    <tr>
+      <td style="padding:4px 6px;font-family:var(--mono);font-size:11px">
+        <span style="color:${t.direction==='out'?'var(--red,#DA251C)':'var(--green)'}">${t.direction==='out'?'▲ OUT':'▼ IN'}</span>
+      </td>
+      <td style="padding:4px 6px;font-family:var(--mono);font-size:11px;color:var(--text)">${t.counterparty||'—'}</td>
+      <td style="padding:4px 6px;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">${t.amount||'—'}</td>
+      <td style="padding:4px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">${t.timestamp||'—'}</td>
+    </tr>`).join('');
+
+  sec.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--sp-2)">
+      <div>
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Account</div>
+        <div style="font-family:var(--mono);font-size:var(--text-lg);font-weight:800;color:var(--text)">${d.account_id}</div>
+      </div>
+      <button onclick="closeNodePanel()" aria-label="Close account panel" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;padding:2px 8px;font-size:14px;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-3)">
+      <span style="font-size:11px;color:var(--muted)">Account risk</span>
+      <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${tier}"></div>
+      </div>
+      <span style="font-family:var(--mono);font-weight:800;color:${tier}">${pct}%</span>
+    </div>
+    <div style="display:flex;gap:var(--sp-3);font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:var(--sp-3)">
+      <span><strong style="color:var(--text)">${d.txn_count}</strong> flagged tx</span>
+      <span><strong style="color:var(--text)">${d.alert_count}</strong> alert${d.alert_count===1?'':'s'}</span>
+    </div>
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:var(--sp-1)">Transaction history</div>
+    <div style="max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:6px">
+      <table style="width:100%;border-collapse:collapse">${rows || '<tr><td style="padding:8px;color:var(--muted);font-size:11px">No flagged transactions</td></tr>'}</table>
+    </div>`;
+}
+
+function closeNodePanel() {
+  const sec = document.getElementById('ir-node-sec');
+  if (sec) { sec.style.display='none'; sec.innerHTML=''; }
+  resetHighlight();
 }
 
 /* ════════════════════════════════════════════
@@ -1217,6 +1354,9 @@ function generateHumanExplanation(a) {
 
 function renderRightPanel() {
   if (!currentAlert) return;
+  // Clear any account drill-down from a previous alert
+  const nodeSec = document.getElementById('ir-node-sec');
+  if (nodeSec) { nodeSec.style.display='none'; nodeSec.innerHTML=''; }
   const a = currentAlert;
   const sevColor = SEV_COLOR[a.severity]||'var(--muted)';
   const dec = decisions[a.id];

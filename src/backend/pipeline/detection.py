@@ -21,7 +21,10 @@ from ..core.serializer import serialize_alerts
 
 logger = logging.getLogger("uvicorn.error")
 
-MIN_CLUSTER_NODES = 2
+# Clusters with fewer than 3 accounts carry too little structure to be a
+# defensible laundering signal (a single A→B transfer is just a payment), so we
+# never raise an alert below this size. See also the load-time guard in api/main.py.
+MIN_CLUSTER_NODES = 3
 
 
 # ── Topology-based pattern labeller ─────────────────────────────────────────

@@ -105,8 +105,13 @@ def _load_cache() -> bool:
     try:
         global ALERTS, SUPPRESSED, ML_METRICS
         cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        # Enforce the minimum-cluster-size rule (>= 3 accounts) on cached alerts
+        # too, so an older cache built under a looser rule can't surface 2-node
+        # alerts. Mirrors MIN_CLUSTER_NODES in pipeline/detection.py.
+        _MIN_NODES = 3
+        cached_alerts = [a for a in cache["alerts"] if len(a.get("nodes", [])) >= _MIN_NODES]
         with ALERTS_LOCK:
-            ALERTS = {a["id"]: a for a in cache["alerts"]}
+            ALERTS = {a["id"]: a for a in cached_alerts}
             SUPPRESSED = {a["id"]: a for a in cache.get("suppressed", [])}
         ML_METRICS = cache.get("ml_metrics", {})
         rid = request_id.get()
@@ -746,6 +751,117 @@ def get_decision_history(request: Request, alert_id: str):
 def get_decisions(request: Request):
     """Current decision state (Issue #1)."""
     return db.current_decisions()
+
+
+# ── Account-level analysis (node drill-down) ────────────────────────────────
+# The model scores edges (transactions). These endpoints roll those edge scores
+# up to the ACCOUNT level so an analyst can click a node and see (a) every
+# flagged transaction it touches and (b) its aggregate risk = the strongest
+# laundering signal on any edge incident to it.
+
+def _money_to_float(s) -> float:
+    try:
+        return float(str(s).replace("$", "").replace(",", "")) or 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _account_risk_table() -> dict:
+    """Aggregate, per account, across every in-memory alert:
+       max/mean edge-importance, txn count, total moved, and the alerts it appears in."""
+    table: dict[str, dict] = {}
+    with ALERTS_LOCK:
+        alerts = list(ALERTS.values())
+    for a in alerts:
+        imp_by_node: dict[str, list] = {}
+        for e in a.get("edges", []):
+            imp = float(e.get("importance", 0.0) or 0.0)
+            imp_by_node.setdefault(str(e.get("source")), []).append(imp)
+            imp_by_node.setdefault(str(e.get("target")), []).append(imp)
+        for t in a.get("transactions", []):
+            paid = _money_to_float(t.get("paid"))
+            for acct, key in ((str(t.get("from")), "sent"), (str(t.get("to")), "recv")):
+                row = table.setdefault(acct, {
+                    "account_id": acct, "sent": 0.0, "recv": 0.0, "txn_count": 0,
+                    "alerts": set(), "banks": set(), "max_importance": 0.0,
+                })
+                row[key] += paid
+                row["txn_count"] += 1
+                row["alerts"].add(a["id"])
+        # fold in edge importances
+        for acct, imps in imp_by_node.items():
+            row = table.setdefault(acct, {
+                "account_id": acct, "sent": 0.0, "recv": 0.0, "txn_count": 0,
+                "alerts": set(), "banks": set(), "max_importance": 0.0,
+            })
+            row["max_importance"] = max(row["max_importance"], max(imps) if imps else 0.0)
+        for n in a.get("nodes", []):
+            row = table.get(str(n.get("id")))
+            if row and n.get("bank"):
+                row["banks"].add(str(n["bank"]))
+    return table
+
+
+@app.get("/accounts/risky")
+@limiter.limit("60/minute")
+def top_risky_accounts(request: Request, limit: int = Query(default=8, ge=1, le=50)):
+    """Top accounts ranked by their strongest laundering-edge score (node-level risk)."""
+    table = _account_risk_table()
+    rows = sorted(
+        table.values(),
+        key=lambda r: (r["max_importance"], r["sent"] + r["recv"]),
+        reverse=True,
+    )[:limit]
+    return [{
+        "account_id": r["account_id"],
+        "risk_score": round(r["max_importance"], 3),
+        "total_moved": r["sent"] + r["recv"],
+        "txn_count": r["txn_count"],
+        "alert_count": len(r["alerts"]),
+        "banks": sorted(r["banks"])[:3],
+    } for r in rows]
+
+
+@app.get("/account/{account_id}/history")
+@limiter.limit("100/minute")
+def account_history(request: Request, account_id: str):
+    """Every flagged transaction involving this account, plus its aggregate risk."""
+    account_id = str(account_id)
+    txns = []
+    with ALERTS_LOCK:
+        alerts = list(ALERTS.values())
+    for a in alerts:
+        for t in a.get("transactions", []):
+            frm, to = str(t.get("from")), str(t.get("to"))
+            if account_id not in (frm, to):
+                continue
+            txns.append({
+                "alert_id": a["id"],
+                "pattern": a.get("patternType"),
+                "severity": a.get("severity"),
+                "direction": "out" if frm == account_id else "in",
+                "counterparty": to if frm == account_id else frm,
+                "amount": t.get("paid"),
+                "currency": t.get("pCur"),
+                "format": t.get("fmt"),
+                "from_bank": t.get("fromBank"),
+                "to_bank": t.get("toBank"),
+                "timestamp": t.get("ts"),
+            })
+    table = _account_risk_table()
+    agg = table.get(account_id)
+    txns.sort(key=lambda x: x.get("timestamp") or "")
+    return {
+        "account_id": account_id,
+        "found": agg is not None,
+        "risk_score": round(agg["max_importance"], 3) if agg else 0.0,
+        "sent_total": agg["sent"] if agg else 0.0,
+        "recv_total": agg["recv"] if agg else 0.0,
+        "txn_count": len(txns),
+        "alert_count": len(agg["alerts"]) if agg else 0,
+        "banks": sorted(agg["banks"]) if agg else [],
+        "transactions": txns,
+    }
 
 
 # ── Whitelist endpoints ─────────────────────────────────────────────────────

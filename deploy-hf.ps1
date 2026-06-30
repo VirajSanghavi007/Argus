@@ -25,7 +25,7 @@ git lfs track "*.pt" | Out-Null
 # HF Space metadata (this branch only; keeps main's README clean)
 $fm = @"
 ---
-title: Argus
+title: UBIArgus
 colorFrom: blue
 colorTo: red
 sdk: docker
