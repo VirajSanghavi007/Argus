@@ -1531,6 +1531,46 @@ async function removeWhitelistAccount(id) {
 /* ════════════════════════════════════════════
    PREDICT (custom transaction scoring)
 ════════════════════════════════════════════ */
+const PREDICT_MAX_ROWS = 5000;
+let predictAbort = null;
+let predictTimer = null;
+
+function clearPredictInput() {
+  const f = document.getElementById('predict-file');
+  if (f) f.value = '';
+  const d = document.getElementById('predict-data');
+  if (d) d.value = '';
+  const tbody = document.getElementById('predict-tbody');
+  if (tbody) tbody.innerHTML = '';
+  const empty = document.getElementById('predict-empty');
+  if (empty) { empty.textContent = 'No results yet. Run a prediction to see scores.'; empty.style.display = 'block'; }
+  document.getElementById('predict-threshold').textContent = '';
+}
+
+function cancelPrediction() {
+  if (predictAbort) predictAbort.abort();
+}
+
+function _predictBusy(on) {
+  document.getElementById('predict-run-btn').style.display = on ? 'none' : '';
+  document.getElementById('predict-cancel-btn').style.display = on ? '' : 'none';
+  document.getElementById('predict-progress-wrap').style.display = on ? 'block' : 'none';
+  if (on) {
+    const start = Date.now();
+    const bar = document.getElementById('predict-progress-bar');
+    let pct = 8;
+    predictTimer = setInterval(() => {
+      pct = Math.min(pct + Math.random() * 8, 92);        // creep toward 92% while waiting
+      bar.style.width = pct + '%';
+      document.getElementById('predict-progress-time').textContent =
+        ((Date.now() - start) / 1000).toFixed(1) + 's';
+    }, 200);
+  } else {
+    clearInterval(predictTimer); predictTimer = null;
+    document.getElementById('predict-progress-bar').style.width = '100%';
+  }
+}
+
 async function runPrediction() {
   const fileInput = document.getElementById('predict-file');
   const dataInput = document.getElementById('predict-data').value.trim();
@@ -1539,21 +1579,34 @@ async function runPrediction() {
   const thresholdLabel = document.getElementById('predict-threshold');
 
   if (!fileInput.files.length && !dataInput) {
-    toast('Please upload a CSV or paste data', 'error');
+    toast('Please upload a CSV/Excel file or paste CSV data', 'error');
     return;
+  }
+
+  // Client-side guards: reject JSON paste + over-limit row counts early.
+  if (dataInput && !fileInput.files.length) {
+    if (dataInput.startsWith('{') || dataInput.startsWith('[')) {
+      toast('JSON is not accepted — paste CSV rows instead', 'error'); return;
+    }
+    const rows = dataInput.split(/\r?\n/).filter(l => l.trim()).length - 1; // minus header
+    if (rows > PREDICT_MAX_ROWS) {
+      toast(`Too many rows (${rows.toLocaleString()}). Max is ${PREDICT_MAX_ROWS.toLocaleString()}.`, 'error'); return;
+    }
   }
 
   const formData = new FormData();
   if (fileInput.files.length > 0) formData.append('file', fileInput.files[0]);
   else if (dataInput) formData.append('data', dataInput);
 
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:var(--sp-4);">Running prediction model...</td></tr>';
   emptyMsg.style.display = 'none';
   thresholdLabel.textContent = '';
+  tbody.innerHTML = '';
+  predictAbort = new AbortController();
+  _predictBusy(true);
 
   try {
     const res = await fetch(`${API_BASE}/predict`, {
-      method: 'POST', body: formData, credentials: API_CREDENTIALS,
+      method: 'POST', body: formData, credentials: API_CREDENTIALS, signal: predictAbort.signal,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1587,9 +1640,17 @@ async function runPrediction() {
     toast('Prediction complete', 'success');
   } catch (err) {
     tbody.innerHTML = '';
-    emptyMsg.textContent = `Error: ${err.message}`;
+    if (err.name === 'AbortError') {
+      emptyMsg.textContent = 'Prediction cancelled.';
+      toast('Prediction cancelled', 'info');
+    } else {
+      emptyMsg.textContent = `Error: ${err.message}`;
+      toast(err.message, 'error');
+    }
     emptyMsg.style.display = 'block';
-    toast(err.message, 'error');
+  } finally {
+    _predictBusy(false);
+    predictAbort = null;
   }
 }
 

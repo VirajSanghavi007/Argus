@@ -827,24 +827,39 @@ async def predict_transactions(
     file: UploadFile | None = File(None),
     data: str | None = Form(None),
 ):
-    """Score user-supplied transactions (CSV upload or pasted CSV/JSON) on demand."""
+    """Score user-supplied transactions (CSV or Excel upload, or pasted CSV) on demand."""
     import pandas as pd
     from ..models.multignn import load_multignn, build_graph, score_transactions
 
+    MAX_PREDICT_ROWS = 5000
+
     try:
         if file:
+            name = (file.filename or "").lower()
             content = await file.read()
-            df = pd.read_csv(io.BytesIO(content))
+            if name.endswith((".xlsx", ".xls")):
+                df = pd.read_excel(io.BytesIO(content))
+            elif name.endswith(".csv"):
+                df = pd.read_csv(io.BytesIO(content))
+            else:
+                raise HTTPException(status_code=400, detail="Only .csv and .xlsx/.xls files are accepted.")
         elif data:
-            try:
-                df = pd.DataFrame(json.loads(data))
-            except json.JSONDecodeError:
-                df = pd.read_csv(io.StringIO(data))
+            # Pasted data is CSV only — JSON is rejected.
+            stripped = data.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
+                raise HTTPException(status_code=400, detail="JSON is not accepted — paste CSV rows instead.")
+            df = pd.read_csv(io.StringIO(data))
         else:
-            raise HTTPException(status_code=400, detail="Must provide 'file' or 'data'")
+            raise HTTPException(status_code=400, detail="Must provide a file or pasted CSV data")
 
         if df.empty:
             raise HTTPException(status_code=400, detail="Provided data is empty")
+
+        if len(df) > MAX_PREDICT_ROWS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Too many rows ({len(df):,}). The Predict tab accepts up to {MAX_PREDICT_ROWS:,} rows.",
+            )
 
         required_cols = {"Timestamp", "From Bank", "Account", "To Bank", "Account.1",
                          "Amount Paid", "Receiving Currency", "Payment Format"}
