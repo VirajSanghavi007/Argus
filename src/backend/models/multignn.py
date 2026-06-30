@@ -363,7 +363,7 @@ def train_multignn(csv_path: Path | None = None, max_rows: int | None = None,
         opt.zero_grad()
         h    = model.encode_nodes(x, edge_index, edge_attr)
         out  = model.classify_edges(h, li_tr, ea_tr)
-        loss = F.binary_cross_entropy_with_logits(out, y_tr, pos_weight=pos_weight)
+        loss = F.binary_cross_entropy_with_logits(out, y_tr.float(), pos_weight=pos_weight)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
         opt.step()
@@ -404,15 +404,14 @@ def train_multignn(csv_path: Path | None = None, max_rows: int | None = None,
 
 def _predict(model, x, edge_index, edge_attr, label_index, edge_attr_targets, batch_size: int = 8192):
     """Full-batch node encode, then chunk the edge head to bound memory."""
-    if HAS_TORCH:
-        torch.set_grad_enabled(False)
     model.eval()
-    h = model.encode_nodes(x, edge_index, edge_attr)
-    probs = []
-    for s in range(0, label_index.size(1), batch_size):
-        chunk = label_index[:, s:s + batch_size]
-        ea    = edge_attr_targets[s:s + batch_size]
-        probs.append(torch.sigmoid(model.classify_edges(h, chunk, ea)))
+    with torch.no_grad():
+        h = model.encode_nodes(x, edge_index, edge_attr)
+        probs = []
+        for s in range(0, label_index.size(1), batch_size):
+            chunk = label_index[:, s:s + batch_size]
+            ea    = edge_attr_targets[s:s + batch_size]
+            probs.append(torch.sigmoid(model.classify_edges(h, chunk, ea)))
     return torch.cat(probs).numpy()
 
 
