@@ -234,11 +234,7 @@ const API_BASE = (window.location.protocol === 'file:')
   : '';
 
 /* ── Pattern formatting ── */
-function formatAlertId(id) {
-  // mgnn_7 → UBI-AML-0007
-  const num = parseInt((id||'').replace(/\D+/g,''), 10);
-  return isNaN(num) ? id.toUpperCase() : `UBI-AML-${String(num).padStart(4,'0')}`;
-}
+function formatAlertId(id) { return (id||'').toUpperCase(); }
 function formatPatternName(pt) {
   const map = {
     fanOut:'FAN-OUT', fanIn:'FAN-IN',
@@ -306,12 +302,7 @@ async function init() {
   ov.style.transition = 'opacity .6s ease';
   ov.style.opacity = '0';
   setTimeout(() => ov.style.display = 'none', 600);
-  // Show user in navbar
-  const navUser = document.getElementById('nav-user');
-  if (navUser && authUser) {
-    navUser.textContent = authUser.name;
-    navUser.style.display = '';
-  }
+  document.getElementById('nav-user').style.display = 'none';
   renderDashboard();
   renderSidebar();
   toast(`Welcome, ${authUser?.name || 'Analyst'}`, 'success');

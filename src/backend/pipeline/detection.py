@@ -149,7 +149,6 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
         )
 
     threshold = float(np.percentile(probs, ALERT_THRESHOLD_PERCENTILE))
-    threshold = max(threshold, probs.max() * 0.3)  # at least 30% of max score
     flagged = df[df["_prob"] >= threshold]
     logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
                 f"(adaptive threshold {threshold:.4f} = p{ALERT_THRESHOLD_PERCENTILE})")
@@ -261,7 +260,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
 
     return {
         "pattern_type": pattern,
-        "alert_id":     f"mgnn_{ci}",
+        "alert_id":     f"UBI-2026-{ci:04d}",
         "nodes_list":   nodes_list,
         "edges_list":   edges_list,
         "transactions_list": transactions_list,
