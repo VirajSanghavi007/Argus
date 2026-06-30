@@ -616,6 +616,20 @@ const SEV_NODE = {
   medium: { bg:'#FFFBEB', border:'#D97706' },
   low:    { bg:'#ECFDF5', border:'#059669' },
 };
+const ROLE_NODE = {
+  source:      { bg:'#EFF6FF', border:'#2563EB', text:'#1D4ED8' },
+  distributor: { bg:'#EFF6FF', border:'#2563EB', text:'#1D4ED8' },
+  coordinator: { bg:'#F5F3FF', border:'#7C3AED', text:'#6D28D9' },
+  hub:         { bg:'#F5F3FF', border:'#7C3AED', text:'#6D28D9' },
+  destination: { bg:'#FEF2F2', border:'#DC2626', text:'#B91C1C' },
+  collector:   { bg:'#FEF2F2', border:'#DC2626', text:'#B91C1C' },
+  intermediary:{ bg:'#FFFBEB', border:'#D97706', text:'#92400E' },
+  default:     { bg:'#F8FAFC', border:'#64748B', text:'#334155' },
+};
+function roleColors(role) {
+  const r = (role||'').toLowerCase();
+  return ROLE_NODE[r] || ROLE_NODE.default;
+}
 const FMT_EDGE = { RTGS:'#00579C', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
 
 function getImportanceColor(importance) {
@@ -662,164 +676,215 @@ function getBankName(raw) {
 }
 
 function getLayout(alert) {
-  if (!alert) return { name:'cose', padding:30, animate:false };
+  if (!alert) return { name:'cose', padding:40, animate:true, animationDuration:400, nodeRepulsion:8000, idealEdgeLength:120 };
   const pt    = alert.patternType;
   const nodes = alert.nodes || [];
+  const n     = nodes.length;
 
-  if (pt === 'fanOut') {
-    const dist = nodes.find(n => n.role === 'Distributor') || nodes[0];
+  if (pt === 'fanOut' || pt === 'fanIn') {
+    const roots = nodes
+      .filter(nd => nd.role === 'Distributor' || nd.role === 'Source' || nd.role === 'Hub')
+      .map(nd => `#${nd.id}`);
     return {
       name: 'breadthfirst', directed: true,
-      roots: dist ? [`#${dist.id}`] : undefined,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
-    };
-  }
-
-  if (pt === 'fanIn') {
-    return {
-      name: 'breadthfirst', directed: false,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+      roots: roots.length ? roots : undefined,
+      padding: 50, spacingFactor: n > 8 ? 1.6 : 2.2,
+      avoidOverlap: true, animate: true, animationDuration: 400,
     };
   }
 
   if (pt === 'cycle') {
-    return { name: 'circle', padding: 30, spacingFactor: 1.3, avoidOverlap: true };
+    return { name: 'circle', padding: 50, spacingFactor: 1.5, avoidOverlap: true, animate: true, animationDuration: 400 };
   }
 
   if (pt === 'bipartite') {
-    const coords  = nodes.filter(n => n.role === 'Coordinator');
-    const root = coords.length ? coords.map(n => `#${n.id}`) : undefined;
     return {
       name: 'breadthfirst', directed: true,
-      roots: root,
-      padding: 40, spacingFactor: 1.8, avoidOverlap: true
+      padding: 50, spacingFactor: 1.8, avoidOverlap: true,
+      animate: true, animationDuration: 400,
+      grid: true,
     };
   }
 
   if (pt === 'scatterGather' || pt === 'gatherScatter') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.8, avoidOverlap: true };
+    const roots = nodes
+      .filter(nd => nd.role === 'Source' || nd.role === 'Distributor')
+      .map(nd => `#${nd.id}`);
+    return {
+      name: 'breadthfirst', directed: true,
+      roots: roots.length ? roots : undefined,
+      padding: 50, spacingFactor: 1.9, avoidOverlap: true,
+      animate: true, animationDuration: 400,
+    };
   }
 
   if (pt === 'stack') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.5, avoidOverlap: true };
+    return {
+      name: 'breadthfirst', directed: true,
+      padding: 50, spacingFactor: 1.6, avoidOverlap: true,
+      animate: true, animationDuration: 400,
+    };
   }
 
-  return { name: 'cose', padding: 30, animate: false, nodeRepulsion: 4500 };
+  return {
+    name: 'cose', padding: 40, animate: true, animationDuration: 500,
+    nodeRepulsion: 9000, idealEdgeLength: 130, nodeOverlap: 20,
+    gravity: 0.25, numIter: 1000, initialTemp: 200,
+  };
 }
 function renderGraph() {
   if (!currentAlert) return;
   if (cy) cy.destroy();
 
-  const elements = [];
-  // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
-  let intermediaryIdx = 0;
-  const intermediaryNodes = currentAlert.nodes.filter(n => {
-    const r = (n.role||'').toLowerCase();
-    return r !== 'source' && r !== 'destination';
-  });
-  const needsNumbering = intermediaryNodes.length > 1;
+  const isDark = document.body.classList.contains('dark');
+  const bgColor = isDark ? '#0F172A' : '#F8FAFC';
+  const textColor = isDark ? '#E2E8F0' : '#0F172A';
+  const mutedColor = isDark ? '#94A3B8' : '#64748B';
 
+  const elements = [];
+
+  // Node label: short role badge + bank ID
+  let iIdx = 0;
   currentAlert.nodes.forEach(n => {
-    const c = SEV_NODE[n.sev]||SEV_NODE.low;
     const r = (n.role||'').toLowerCase();
-    let shortLabel;
-    if (r === 'source') {
-      shortLabel = 'S';
-    } else if (r === 'destination') {
-      shortLabel = 'D';
-    } else {
-      // intermediary, distributor, coordinator, hub, etc.
-      shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
-      intermediaryIdx++;
-    }
-    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
-      bank:n.bank, vol:n.vol, txn:n.txn }, style:{
-      'background-color':c.bg, 'border-color':c.border,
+    const rc = roleColors(r);
+    let badge;
+    if (r === 'source' || r === 'distributor')      badge = 'SRC';
+    else if (r === 'destination' || r === 'collector') badge = 'DST';
+    else if (r === 'hub' || r === 'coordinator')    badge = 'HUB';
+    else { badge = `I${iIdx}`; iIdx++; }
+
+    const bankShort = getBankName(n.bank) || n.bank || n.id;
+    const displayBank = bankShort.length > 14 ? bankShort.slice(0,13)+'…' : bankShort;
+
+    elements.push({ data:{
+      id: n.id, badge, bankLabel: displayBank,
+      sev: n.sev, role: n.role, bank: n.bank, vol: n.vol, txn: n.txn,
+      _bg: rc.bg, _border: rc.border, _text: rc.text,
     }});
   });
+
+  // Edges — label with amount if available
   currentAlert.edges.forEach(e => {
-    const fmt = (currentAlert.transactions[e.txIdx]||{}).fmt||'';
-    const importance = e.importance || 0.5;
-    elements.push({ data:{ id:e.id, source:e.source, target:e.target,
-      label:e.label, txIdx:e.txIdx, fmt, importance } });
+    const tx = (currentAlert.transactions[e.txIdx]||{});
+    const importance = e.importance ?? 0.5;
+    const edgeLabel = tx.amount ? `$${Number(tx.amount).toLocaleString('en-US',{maximumFractionDigits:0})}` : (e.label||'');
+    elements.push({ data:{
+      id: e.id, source: e.source, target: e.target,
+      label: edgeLabel, txIdx: e.txIdx, fmt: tx.fmt||'', importance,
+    }});
   });
 
   cy = cytoscape({
     container: document.getElementById('cy'),
     elements,
-    style:[
-      { selector:'node', style:{
-        'background-color':'data(background-color)',
-        'border-color':'data(border-color)',
-        'border-width':2, 'color':'#0F172A',
-        'font-size':9, 'font-family':'Poppins, sans-serif',
-        'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
-      }},
-      { selector:'edge', style:{
-        'line-color': e => getImportanceColor(e.data('importance')),
-        'target-arrow-color': e => getImportanceColor(e.data('importance')),
-        'target-arrow-shape':'triangle', 'curve-style':'bezier',
-        'width': e => 1.5 + (e.data('importance')||0.5) * 2,
-        'font-size':8, 'color':'#475569',
-        'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
-        'text-background-opacity':.9,
-        'text-background-padding':2,
-      }},
-      { selector:'node', style:{
-        'background-color': ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).bg,
-        'border-color':     ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).border,
-      }},
-      { selector:'.hl-edge', style:{ 'line-color':'#00579C','target-arrow-color':'#00579C','width':3 } },
-      { selector:'.dim', style:{ opacity:0.15 } },
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'width': 56, 'height': 56,
+          'background-color': ele => ele.data('_bg'),
+          'border-color':     ele => ele.data('_border'),
+          'border-width': 2.5,
+          'label': ele => `${ele.data('badge')}\n${ele.data('bankLabel')}`,
+          'text-valign': 'center', 'text-halign': 'center',
+          'color': ele => ele.data('_text'),
+          'font-size': 8, 'font-family': 'Poppins, system-ui, sans-serif',
+          'font-weight': 600,
+          'text-wrap': 'wrap', 'text-max-width': 52,
+          'text-margin-y': 0,
+          'shadow-blur': 8, 'shadow-color': 'rgba(0,0,0,0.12)', 'shadow-offset-x': 0, 'shadow-offset-y': 2,
+        }
+      },
+      {
+        selector: 'node[sev="high"]',
+        style: { 'border-width': 3, 'border-color': '#DC2626', 'background-color': '#FEF2F2' }
+      },
+      {
+        selector: 'edge',
+        style: {
+          'curve-style': 'bezier',
+          'target-arrow-shape': 'triangle',
+          'target-arrow-color': ele => getImportanceColor(ele.data('importance')),
+          'line-color':         ele => getImportanceColor(ele.data('importance')),
+          'width':              ele => 1.5 + (ele.data('importance') || 0.5) * 2.5,
+          'arrow-scale': 1.3,
+          'label': 'data(label)',
+          'font-size': 7, 'font-family': 'Poppins, system-ui, sans-serif',
+          'color': mutedColor,
+          'text-background-color': isDark ? '#1E293B' : '#FFFFFF',
+          'text-background-opacity': 0.85,
+          'text-background-padding': '3px',
+          'text-background-shape': 'roundrectangle',
+          'text-border-opacity': 0.6,
+          'text-border-width': 0.5,
+          'text-border-color': isDark ? '#334155' : '#E2E8F0',
+          'edge-text-rotation': 'autorotate',
+          'source-distance-from-node': 4,
+          'target-distance-from-node': 4,
+        }
+      },
+      { selector: '.hl-node', style: { 'border-width': 4, 'border-color': '#00579C', 'shadow-blur': 16, 'shadow-color': 'rgba(0,87,156,0.4)' } },
+      { selector: '.hl-edge', style: { 'line-color': '#00579C', 'target-arrow-color': '#00579C', 'width': 3.5 } },
+      { selector: '.dim', style: { 'opacity': 0.12 } },
+      { selector: '.tl-active', style: { 'line-color': '#F97316', 'target-arrow-color': '#F97316', 'width': 4, 'z-index': 10 } },
     ],
     layout: getLayout(currentAlert),
-    userZoomingEnabled:true, userPanningEnabled:true,
+    userZoomingEnabled: true, userPanningEnabled: true,
+    boxSelectionEnabled: false,
   });
 
-  cy.on('mouseover','node', e => {
-    const n = e.target.data();
+  // After layout, auto-fit with padding
+  cy.ready(() => cy.fit(cy.elements(), 50));
+
+  // Tooltip on hover
+  const showTT = (x, y, lines) => {
+    const tt = document.getElementById('tooltip');
+    tt.style.left = x + 'px'; tt.style.top = y + 'px'; tt.style.display = 'block';
+    const [id, bank, role, vol, txn] = lines;
+    document.getElementById('tt-id').textContent   = id   || '';
+    document.getElementById('tt-bank').textContent = bank || '—';
+    document.getElementById('tt-role').textContent = role || '—';
+    document.getElementById('tt-vol').textContent  = vol  || '—';
+    document.getElementById('tt-txn').textContent  = txn  || '—';
+  };
+  const hideTT = () => document.getElementById('tooltip').style.display = 'none';
+  const rendPos = (e) => {
     const pos = e.renderedPosition;
     const box = document.getElementById('cy').getBoundingClientRect();
-    const tt  = document.getElementById('tooltip');
-    tt.style.left = (box.left+pos.x+16)+'px';
-    tt.style.top  = (box.top+pos.y-20)+'px';
-    tt.style.display='block';
-    document.getElementById('tt-id').textContent   = n.id;
-    document.getElementById('tt-bank').textContent = getBankName(n.bank)||'—';
-    document.getElementById('tt-role').textContent = n.role||'—';
-    document.getElementById('tt-vol').textContent  = n.vol||'—';
-    document.getElementById('tt-txn').textContent  = n.txn||'—';
+    return [box.left + pos.x + 18, box.top + pos.y - 10];
+  };
+
+  cy.on('mouseover', 'node', e => {
+    const [x, y] = rendPos(e); const d = e.target.data();
+    showTT(x, y, [d.id, getBankName(d.bank)||d.bank, d.role, d.vol, d.txn]);
   });
-  cy.on('mouseout','node', () => document.getElementById('tooltip').style.display='none');
-  cy.on('mouseover','edge', e => {
-    const edgeData = e.target.data();
-    const pos = e.renderedPosition;
-    const box = document.getElementById('cy').getBoundingClientRect();
-    const tt  = document.getElementById('tooltip');
-    tt.style.left = (box.left+pos.x+16)+'px';
-    tt.style.top  = (box.top+pos.y-20)+'px';
-    tt.style.display='block';
-    document.getElementById('tt-id').textContent   = `${edgeData.source} → ${edgeData.target}`;
-    document.getElementById('tt-bank').textContent = edgeData.label||'—';
-    document.getElementById('tt-role').textContent = '';
-    document.getElementById('tt-vol').textContent  = '—';
-    document.getElementById('tt-txn').textContent  = '—';
+  cy.on('mouseout', 'node', hideTT);
+
+  cy.on('mouseover', 'edge', e => {
+    const [x, y] = rendPos(e); const d = e.target.data();
+    const tx = (currentAlert.transactions[d.txIdx]||{});
+    showTT(x, y, [`${d.source} → ${d.target}`, d.fmt||'—', `Importance: ${Math.round((d.importance||0.5)*100)}%`, tx.amount ? `$${Number(tx.amount).toLocaleString()}` : '—', '—']);
   });
-  cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
-  cy.on('tap','node', e => highlightNode(e.target.id()));
+  cy.on('mouseout', 'edge', hideTT);
+
+  cy.on('tap', 'node', e => highlightNode(e.target.id()));
+  cy.on('tap', 'core', e => { if (e.target === cy) resetHighlight(); });
 }
 
 function highlightNode(id) {
   if (!cy) return;
   resetHighlight();
-  cy.nodes(`[id="${id}"]`).style({'border-width':4});
-  cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
+  const node = cy.nodes(`[id="${id}"]`);
+  const connected = node.connectedEdges();
+  node.addClass('hl-node');
+  connected.addClass('hl-edge');
+  cy.elements().not(node).not(connected).addClass('dim');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
 }
 function resetHighlight() {
   if (!cy) return;
-  cy.elements().removeClass('dim hl-edge');
-  cy.nodes().style({'border-width':2});
+  cy.elements().removeClass('dim hl-edge hl-node tl-active');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
 }
 function downloadPNG() {
@@ -859,9 +924,9 @@ function applyStep(idx) {
       <span>${tx.ts||'—'}</span>
     </div>`;
   if (cy) {
-    cy.edges().removeClass('hl-edge');
+    cy.edges().removeClass('tl-active');
     const me = currentAlert.edges.find(e=>e.txIdx===idx);
-    if (me) cy.edges(`[id="${me.id}"]`).addClass('hl-edge');
+    if (me) cy.edges(`[id="${me.id}"]`).addClass('tl-active');
   }
   updateCounter(); renderDots();
 }

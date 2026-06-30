@@ -73,9 +73,16 @@ def _classify_topology(sub: nx.DiGraph) -> str:
     if len(hubs_gs) == 1 and len(senders) >= 2 and len(dests) >= 2:
         return "GATHER_SCATTER"
 
+    # Bipartite: only classify as such when BOTH groups are large (≥3 each),
+    # otherwise it's really a scatter/gather or stack variant
     try:
         if nx.is_bipartite(sub.to_undirected()):
-            return "BIPARTITE"
+            sets = nx.bipartite.sets(sub.to_undirected())
+            if min(len(s) for s in sets) >= 3:
+                return "BIPARTITE"
+            # Small bipartite → more meaningful AML label
+            if len(origins) >= 2 and len(dests) >= 2:
+                return "SCATTER_GATHER"
     except Exception:
         pass
 
@@ -83,19 +90,18 @@ def _classify_topology(sub: nx.DiGraph) -> str:
         return "STACK"
 
     return "RANDOM"
-# The model's F1-max threshold is tuned for recall and flags far too many
-# transactions at a 0.1% base rate. For the dashboard we operate at a stricter,
-# high-precision point and cap the number of clusters shown.
-ALERT_THRESHOLD_FLOOR = 0.10
+# Use top-0.1% of scores as the floor — adapts to any score scale.
+# This produces ~50-300 flagged transactions regardless of model calibration.
+ALERT_THRESHOLD_PERCENTILE = 99.9
 MAX_ALERTS = 200
 
 
-def _severity(prob: float) -> str:
-    if prob >= 0.85:
-        return "critical"
-    if prob >= 0.6:
+def _severity(prob: float, max_prob: float = 1.0) -> str:
+    # Normalize to local max so severity is relative to the dataset's score range
+    rel = prob / max(max_prob, 1e-6)
+    if rel >= 0.80:
         return "high"
-    if prob >= 0.4:
+    if rel >= 0.50:
         return "medium"
     return "low"
 
@@ -116,8 +122,9 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
             "python backend/multignn_model.py --epochs 8"
         )
 
-    model_thr = float(metrics.get("threshold", 0.5)) if metrics else 0.5
-    threshold = max(model_thr, ALERT_THRESHOLD_FLOOR)
+    # Adaptive threshold: top ALERT_THRESHOLD_PERCENTILE of scores.
+    # Falls back to model's F1-max threshold if scores aren't available yet.
+    _adaptive_threshold = None  # computed after scoring
 
     try:
         bundle = build_graph(max_rows=max_rows, return_df=True)
@@ -141,9 +148,11 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
             f"Failed to score transactions: {e}. Check model compatibility and feature dimensions."
         )
 
+    threshold = float(np.percentile(probs, ALERT_THRESHOLD_PERCENTILE))
+    threshold = max(threshold, probs.max() * 0.3)  # at least 30% of max score
     flagged = df[df["_prob"] >= threshold]
     logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
-                f"(threshold {threshold:.3f})")
+                f"(adaptive threshold {threshold:.4f} = p{ALERT_THRESHOLD_PERCENTILE})")
 
     # Compute edge importance explanations for flagged transactions (for interpretability).
     # This shows judges *why* transactions were flagged.
@@ -155,11 +164,13 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     # Cluster flagged transactions by connected accounts (account identity = bank:account)
     G = _build_flagged_graph(flagged)
 
+    global_max_prob = float(probs.max()) if len(probs) else 1.0
+
     raw_alerts = []
     for ci, comp in enumerate(nx.weakly_connected_components(G)):
         if len(comp) < MIN_CLUSTER_NODES:
             continue
-        raw = _component_to_alert(ci, comp, G, flagged, explanations)
+        raw = _component_to_alert(ci, comp, G, flagged, explanations, global_max_prob)
         if raw is not None:
             raw_alerts.append(raw)
 
@@ -183,7 +194,7 @@ def _build_flagged_graph(flagged) -> nx.DiGraph:
     return G
 
 
-def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations: dict | None = None) -> dict | None:
+def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations: dict | None = None, global_max_prob: float = 1.0) -> dict | None:
     sub = G.subgraph(comp)
     edge_data = list(sub.edges(data=True))
     if not edge_data:
@@ -219,7 +230,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         role  = "source" if in_e == 0 else "destination" if out_e == 0 else "intermediary"
         nodes_list.append({
             "node_id": label.get(n, n),
-            "sev":     _severity(max_prob if role == "intermediary" else cluster_prob),
+            "sev":     _severity(max_prob if role == "intermediary" else cluster_prob, global_max_prob),
             "role":    role,
             "bank":    bank.get(n, "?"),
             "vol":     sent[n] + recv[n],
@@ -255,7 +266,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         "edges_list":   edges_list,
         "transactions_list": transactions_list,
         "sub":          pattern_desc or "Multi-GNN detected laundering cluster",
-        "severity":     _severity(cluster_prob),
+        "severity":     _severity(cluster_prob, global_max_prob),
         "confidence":   round(cluster_prob, 4),
         "ml_score":     round(cluster_prob, 4),
         "ml_score_rf":  None,

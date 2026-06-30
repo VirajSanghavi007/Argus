@@ -78,10 +78,16 @@ except ImportError:  # pragma: no cover - guarded for torch-less environments
 
 
 def _resolve_csv() -> Path:
-    for p in (DATA_DIR / "active" / "HI-Small_Trans.csv", DATA_DIR / "IBM" / "HI-Small_Trans.csv", DATA_DIR / "HI-Small_Trans.csv"):
+    candidates = [
+        DATA_DIR / "TransXion" / "data" / "tx.csv",
+        DATA_DIR / "active" / "HI-Small_Trans.csv",
+        DATA_DIR / "IBM" / "HI-Small_Trans.csv",
+        DATA_DIR / "HI-Small_Trans.csv",
+    ]
+    for p in candidates:
         if p.exists():
             return p
-    return DATA_DIR / "active" / "HI-Small_Trans.csv"
+    return candidates[0]
 
 
 # ── Graph construction ─────────────────────────────────────────────────────────
