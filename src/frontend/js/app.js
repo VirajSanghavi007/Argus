@@ -532,7 +532,7 @@ function setSrc(v,el) {
   el.classList.add('active'); renderSidebar();
 }
 function setSev(v,el) {
-  sevFilter=v;
+  sevFilter=v.toLowerCase();
   document.querySelectorAll('#sev-pills .filter-pill').forEach(p=>p.classList.remove('active'));
   el.classList.add('active'); renderSidebar();
 }
@@ -542,8 +542,12 @@ function renderSidebar() {
   const filtered = allAlerts.filter(a => {
     if (srcFilter!=='all' && a.source!==srcFilter) return false;
     if (sevFilter!=='all' && a.severity!==sevFilter) return false;
-    if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
-             !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
+    if (q) {
+      const banks = (a.nodes||[]).map(n=>getBankName(n.bank)||n.bank||'').join(' ').toLowerCase();
+      const ids   = (a.nodes||[]).map(n=>n.id||'').join(' ').toLowerCase();
+      if (!formatPatternName(a.patternType).toLowerCase().includes(q) &&
+          !a.id.toLowerCase().includes(q) && !banks.includes(q) && !ids.includes(q)) return false;
+    }
     return true;
   });
   const el = document.getElementById('alert-list');
@@ -559,10 +563,11 @@ function renderSidebar() {
       ${decDot}
       <div class="ac-name">${formatPatternName(a.patternType)}</div>
       <div class="ac-badges">
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
+        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity.toUpperCase()}</span>
+        <span class="badge badge-mono">${a.node_count}n · ${a.txn_count}tx</span>
       </div>
-      <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
+      <div class="ac-banks">${(a.nodes||[]).slice(0,2).map(n=>getBankName(n.bank)||n.bank).filter(Boolean).join(' → ')}</div>
+      <div class="ac-meta">${a.totalMoved} · ${(a.timeSpan||'').split(' ')[0]}</div>
     </div>`;
   }).join('');
 }

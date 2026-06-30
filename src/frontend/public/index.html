@@ -146,12 +146,6 @@
     <div class="inv-left-head">
       <label for="inv-search" class="label-up" style="margin-bottom:var(--sp-1)">Search alerts</label>
       <input type="search" placeholder="Search alerts…" id="inv-search" oninput="renderSidebar()" aria-label="Filter alerts by name or ID"/>
-      <div class="inv-filter-row" id="src-pills" role="group" aria-label="Source filter">
-        <span class="filter-pill active" onclick="setSrc('all',this)" role="button" tabindex="0">All</span>
-        <span class="filter-pill" onclick="setSrc('labelled',this)" role="button" tabindex="0">Labelled</span>
-        <span class="filter-pill" onclick="setSrc('unlabelled',this)" role="button" tabindex="0">Unlabelled</span>
-        <span class="filter-pill" onclick="setSrc('both',this)" role="button" tabindex="0">Both</span>
-      </div>
       <div class="inv-filter-row" id="sev-pills" role="group" aria-label="Severity filter">
         <span class="filter-pill active" onclick="setSev('all',this)" role="button" tabindex="0">All</span>
         <span class="filter-pill" onclick="setSev('HIGH',this)" role="button" tabindex="0">High</span>

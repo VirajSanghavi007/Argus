@@ -480,6 +480,8 @@ def list_alerts(
                 continue
             if source and a.get("source") != source.value:
                 continue
+            nodes = a.get("nodes", [])
+            banks = list(dict.fromkeys(n.get("bank", "") for n in nodes if n.get("bank")))
             results.append({
                 "id": a["id"],
                 "name": a["name"],
@@ -490,9 +492,10 @@ def list_alerts(
                 "totalMoved": a["totalMoved"],
                 "timeSpan": a["timeSpan"],
                 "hops": a["hops"],
-                "node_count": len(a["nodes"]),
+                "node_count": len(nodes),
                 "txn_count": len(a["transactions"]),
                 "source": a.get("source", "labelled"),
+                "nodes": [{"bank": b} for b in banks[:3]],
             })
 
     return JSONResponse(content=results, headers={"Cache-Control": "no-store"})
