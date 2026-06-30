@@ -560,7 +560,7 @@ function renderDashboard() {
   document.getElementById('st-total').textContent = allAlerts.length;
   const total = allAlerts.reduce((s,a) => s + parseMoney(a.totalMoved), 0);
   document.getElementById('st-money').textContent = fmtMoney(total);
-  document.getElementById('st-high').textContent  = allAlerts.filter(a=>a.severity==='HIGH').length;
+  document.getElementById('st-high').textContent  = allAlerts.filter(a=>(a.severity||'').toLowerCase()==='high').length;
   document.getElementById('st-dec').textContent   = Object.keys(decisions).length;
 
   if (!allAlerts.length) return;
@@ -845,9 +845,9 @@ function getImportanceColor(importance) {
   // Low (0.0): #E5E7EB, Medium (0.5): #F97316, High (1.0): #DC2626
   const imp = Math.max(0, Math.min(1, importance || 0.5));
   if (imp < 0.5) {
-    // Interpolate from gray to orange
+    // Interpolate from visible slate to orange (slate floor so low edges stay visible)
     const t = imp * 2; // 0 to 1
-    return interpolateHex('#E5E7EB', '#F97316', t);
+    return interpolateHex('#64748B', '#F97316', t);
   } else {
     // Interpolate from orange to red
     const t = (imp - 0.5) * 2; // 0 to 1
@@ -883,29 +883,35 @@ function getBankName(raw) {
   return BANK_NAMES[n % BANK_NAMES.length];
 }
 
+// Position nodes in 3 columns: sources (left) → intermediaries (mid) → destinations (right)
+function _columnPositions(nodes) {
+  const COL = { left: 120, mid: 400, right: 680 };
+  const ROW = 110;
+  const buckets = { left: [], mid: [], right: [] };
+  nodes.forEach(n => {
+    const r = (n.role||'').toLowerCase();
+    if (r === 'source' || r === 'distributor' || r === 'sender') buckets.left.push(n);
+    else if (r === 'destination' || r === 'collector') buckets.right.push(n);
+    else buckets.mid.push(n);
+  });
+  const pos = {};
+  Object.entries(buckets).forEach(([col, list]) => {
+    const x = COL[col];
+    const total = list.length;
+    const offset = (total - 1) / 2;
+    list.forEach((n, i) => { pos[n.id] = { x, y: 250 + (i - offset) * ROW }; });
+  });
+  return pos;
+}
+
 function getLayout(alert) {
   if (!alert) return { name:'cose', padding:30, animate:false };
   const pt    = alert.patternType;
   const nodes = alert.nodes || [];
 
-  if (pt === 'fanOut') {
-    const src = nodes.find(n => ['source','distributor'].includes((n.role||'').toLowerCase()));
-    return {
-      name: 'concentric',
-      concentric: ele => ele.data('id') === src?.id ? 10 : 1,
-      levelWidth: () => 1,
-      padding: 70, spacingFactor: 2.2, avoidOverlap: true, minNodeSpacing: 40,
-    };
-  }
-
-  if (pt === 'fanIn') {
-    const dst = nodes.find(n => ['destination','collector'].includes((n.role||'').toLowerCase()));
-    return {
-      name: 'concentric',
-      concentric: ele => ele.data('id') === dst?.id ? 10 : 1,
-      levelWidth: () => 1,
-      padding: 70, spacingFactor: 2.2, avoidOverlap: true, minNodeSpacing: 40,
-    };
+  // Fan-in / Fan-out: explicit left→right columns (senders left, receivers right)
+  if (pt === 'fanOut' || pt === 'fanIn') {
+    return { name: 'preset', positions: _columnPositions(nodes), fit: true, padding: 30 };
   }
 
   if (pt === 'cycle') {
@@ -999,8 +1005,8 @@ function renderGraph() {
         'line-color': e => getImportanceColor(e.data('importance')),
         'target-arrow-color': e => getImportanceColor(e.data('importance')),
         'target-arrow-shape':'triangle', 'curve-style':'bezier',
-        'width': e => 1.5 + (e.data('importance')||0.5) * 2.5,
-        'arrow-scale': 1.2,
+        'width': e => 3 + (e.data('importance')||0.5) * 3,
+        'arrow-scale': 1.4, 'opacity': 0.95,
         'font-size':9, 'color':'#64748B',
         'text-background-color':'#0F172A',
         'text-background-opacity':0.85,
@@ -1046,6 +1052,9 @@ function renderGraph() {
   cy.on('tap','node', e => highlightNode(e.target.id()));
   // Tap on background → reset highlight and fit view
   cy.on('tap', e => { if (e.target === cy) { resetHighlight(); cy.fit(undefined, 40); } });
+  // Always fit the graph to the container once the layout settles (kills whitespace)
+  cy.one('layoutstop', () => cy.fit(undefined, 45));
+  cy.ready(() => cy.fit(undefined, 45));
 }
 
 function highlightNode(id) {
@@ -1067,7 +1076,12 @@ function resetHighlight() {
 ════════════════════════════════════════════ */
 function renderTimeline() {
   updateCounter(); renderDots();
-  if (currentAlert?.transactions?.length) applyStep(0);
+  // Show the whole graph initially — no dimming. User steps with Next/Prev.
+  currentStep = -1;
+  const n = currentAlert?.transactions?.length || 0;
+  document.getElementById('tl-card').innerHTML = n
+    ? `<span style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">Showing full network · ${n} transaction${n>1?'s':''}. Use Next to trace the flow.</span>`
+    : '<span style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">No transactions</span>';
 }
 function applyStep(idx) {
   if (!currentAlert) return;
