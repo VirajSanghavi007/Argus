@@ -113,14 +113,14 @@ function playCinematicIntro() {
     shield.style.opacity = '1'; shield.style.transform = 'scale(1)';
   }, 150);
 
-  // Red-blue line extends
-  setTimeout(() => { line.style.width = '280px'; }, 400);
-
   // Bank name types in
   setTimeout(() => {
     name.style.transition = 'opacity .3s ease, transform .3s ease';
     name.style.opacity = '1'; name.style.transform = 'translateY(0)';
-  }, 500);
+  }, 400);
+
+  // Red-blue line extends
+  setTimeout(() => { line.style.width = '280px'; }, 500);
 
   // Sub text
   setTimeout(() => {
@@ -502,22 +502,14 @@ function fmtMoney(n) {
 /* ════════════════════════════════════════════
    INVESTIGATE SIDEBAR
 ════════════════════════════════════════════ */
-function setSrc(v,el) {
-  srcFilter=v;
-  document.querySelectorAll('#src-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-function setSev(v,el) {
-  sevFilter=v;
-  document.querySelectorAll('#sev-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-
 function renderSidebar() {
   const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
+  const patFilter = document.getElementById('inv-pattern-filter')?.value || 'all';
+  const prioFilter = document.getElementById('inv-priority-filter')?.value || 'all';
+
   const filtered = allAlerts.filter(a => {
-    if (srcFilter!=='all' && a.source!==srcFilter) return false;
-    if (sevFilter!=='all' && a.severity!==sevFilter) return false;
+    if (patFilter !== 'all' && a.patternType !== patFilter) return false;
+    if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
     if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
              !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
     return true;
@@ -539,14 +531,33 @@ function renderSidebar() {
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
       ${decDot}
-      <div class="ac-name">${formatPatternName(a.patternType)}</div>
-      <div class="ac-badges">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
+        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${a.id.toUpperCase().replace('_', '-')}</div>
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlBadge}
       </div>
-      <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%"></div></div>
-      <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
+      
+      <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--sp-3)">
+        ${formatPatternName(a.patternType)}
+      </div>
+      
+      ${mlBadge ? `<div class="ac-badges" style="margin-bottom:var(--sp-2)">${mlBadge}</div>` : ''}
+      
+      <div style="display:flex; gap:var(--sp-4); margin-bottom:var(--sp-2); font-family:var(--mono);">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Amount</span>
+          <span style="font-size:var(--text-base); font-weight:700; color:var(--blue);">${a.totalMoved}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Time</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${(a.timeSpan || '').split(' ')[0]}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Hops</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${a.hops}</span>
+        </div>
+      </div>
+      
+      <div class="conf-bar-bg" style="height:4px; margin-top:var(--sp-2)"><div class="conf-bar" style="width:${conf}%; height:100%; background:var(--red);"></div></div>
     </div>`;
   }).join('');
 }
@@ -805,12 +816,6 @@ function resetHighlight() {
   cy.elements().removeClass('dim hl-edge');
   cy.nodes().style({'border-width':2});
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
-}
-function downloadPNG() {
-  if (!cy) return;
-  const a = document.createElement('a');
-  a.href = cy.png({scale:2, bg: document.body.classList.contains('dark') ? '#0D1B2A' : '#F8FAFC'});
-  a.download = `aml-${currentAlert?.id||'graph'}.png`; a.click();
 }
 
 /* ════════════════════════════════════════════
