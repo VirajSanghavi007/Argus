@@ -53,14 +53,14 @@ def _classify_topology(sub: nx.DiGraph) -> str:
         except nx.NetworkXNoCycle:
             pass
 
-    hubs_out = [v for v in nodes if out_deg[v] >= 3 and in_deg[v] == 0]
+    hubs_out = [v for v in nodes if out_deg[v] >= 2 and in_deg[v] <= 1]
     leaves_in = [v for v in nodes if out_deg[v] == 0]
-    if len(hubs_out) == 1 and len(leaves_in) >= n - 2:
+    if len(hubs_out) >= 1 and len(leaves_in) >= max(2, n // 2):
         return "FAN_OUT"
 
-    hubs_in = [v for v in nodes if in_deg[v] >= 3 and out_deg[v] == 0]
+    hubs_in = [v for v in nodes if in_deg[v] >= 2 and out_deg[v] <= 1]
     senders = [v for v in nodes if in_deg[v] == 0]
-    if len(hubs_in) == 1 and len(senders) >= n - 2:
+    if len(hubs_in) >= 1 and len(senders) >= max(2, n // 2):
         return "FAN_IN"
 
     origins = [v for v in nodes if in_deg[v] == 0]
@@ -96,14 +96,20 @@ ALERT_THRESHOLD_PERCENTILE = 99
 MAX_ALERTS = 200
 
 
-def _severity(prob: float, max_prob: float = 1.0) -> str:
-    # Normalize to local max so severity is relative to the dataset's score range
-    rel = prob / max(max_prob, 1e-6)
-    if rel >= 0.80:
-        return "high"
-    if rel >= 0.50:
-        return "medium"
-    return "low"
+def _assign_severities(raw_alerts: list) -> None:
+    """Rank clusters by confidence and assign severity by percentile across this run."""
+    if not raw_alerts:
+        return
+    scores = sorted(a["confidence"] for a in raw_alerts)
+    n = len(scores)
+    p85 = scores[int(n * 0.85)]
+    p60 = scores[int(n * 0.60)]
+    for a in raw_alerts:
+        c = a["confidence"]
+        sev = "high" if c >= p85 else ("medium" if c >= p60 else "low")
+        a["severity"] = sev
+        for node in a.get("nodes_list", []):
+            node["sev"] = sev
 
 
 def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
@@ -163,18 +169,17 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     # Cluster flagged transactions by connected accounts (account identity = bank:account)
     G = _build_flagged_graph(flagged)
 
-    global_max_prob = float(probs.max()) if len(probs) else 1.0
-
     raw_alerts = []
     for ci, comp in enumerate(nx.weakly_connected_components(G)):
         if len(comp) < MIN_CLUSTER_NODES:
             continue
-        raw = _component_to_alert(ci, comp, G, flagged, explanations, global_max_prob)
+        raw = _component_to_alert(ci, comp, G, flagged, explanations)
         if raw is not None:
             raw_alerts.append(raw)
 
     raw_alerts.sort(key=lambda a: a["confidence"], reverse=True)
     raw_alerts = raw_alerts[:MAX_ALERTS]
+    _assign_severities(raw_alerts)
     serialized = serialize_alerts(raw_alerts)
     logger.info(f"Multi-GNN produced {len(serialized)} alert clusters")
     return serialized, (metrics or {})
@@ -193,7 +198,7 @@ def _build_flagged_graph(flagged) -> nx.DiGraph:
     return G
 
 
-def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations: dict | None = None, global_max_prob: float = 1.0) -> dict | None:
+def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations: dict | None = None) -> dict | None:
     sub = G.subgraph(comp)
     edge_data = list(sub.edges(data=True))
     if not edge_data:
@@ -229,7 +234,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         role  = "source" if in_e == 0 else "destination" if out_e == 0 else "intermediary"
         nodes_list.append({
             "node_id": label.get(n, n),
-            "sev":     _severity(max_prob if role == "intermediary" else cluster_prob, global_max_prob),
+            "sev":     "low",
             "role":    role,
             "bank":    bank.get(n, "?"),
             "vol":     sent[n] + recv[n],
@@ -265,7 +270,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
         "edges_list":   edges_list,
         "transactions_list": transactions_list,
         "sub":          pattern_desc or "Multi-GNN detected laundering cluster",
-        "severity":     _severity(cluster_prob, global_max_prob),
+        "severity":     "low",
         "confidence":   round(cluster_prob, 4),
         "ml_score":     round(cluster_prob, 4),
         "ml_score_rf":  None,
