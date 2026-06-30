@@ -618,10 +618,17 @@ async function loadAlertById(id) {
 /* ════════════════════════════════════════════
    GRAPH
 ════════════════════════════════════════════ */
-const SEV_NODE = {
-  high:   { bg:'#FEF2F2', border:'#DC2626' },
-  medium: { bg:'#FFFBEB', border:'#D97706' },
-  low:    { bg:'#ECFDF5', border:'#059669' },
+// Role-based node palette (dark-native, no cream)
+const ROLE_NODE = {
+  source:       { bg:'#00579C', border:'#3B82F6', text:'#FFFFFF' },
+  destination:  { bg:'#991B1B', border:'#EF4444', text:'#FFFFFF' },
+  intermediary: { bg:'#1E3A5F', border:'#334155', text:'#94A3B8' },
+  default:      { bg:'#1E3A5F', border:'#334155', text:'#94A3B8' },
+};
+const SEV_RING = {
+  high:   '#EF4444',
+  medium: '#F59E0B',
+  low:    '#10B981',
 };
 const FMT_EDGE = { RTGS:'#00579C', NEFT:'#059669', Cheque:'#D97706', 'Credit Card':'#7C3AED' };
 
@@ -674,29 +681,27 @@ function getLayout(alert) {
   const nodes = alert.nodes || [];
 
   if (pt === 'fanOut') {
-    // Hub in centre, destinations radiate outward like a star
     const src = nodes.find(n => ['source','distributor'].includes((n.role||'').toLowerCase()));
     return {
       name: 'concentric',
       concentric: ele => ele.data('id') === src?.id ? 10 : 1,
       levelWidth: () => 1,
-      padding: 50, spacingFactor: 1.6, avoidOverlap: true
+      padding: 70, spacingFactor: 2.2, avoidOverlap: true, minNodeSpacing: 40,
     };
   }
 
   if (pt === 'fanIn') {
-    // Senders on outer ring, collector in centre
     const dst = nodes.find(n => ['destination','collector'].includes((n.role||'').toLowerCase()));
     return {
       name: 'concentric',
       concentric: ele => ele.data('id') === dst?.id ? 10 : 1,
       levelWidth: () => 1,
-      padding: 50, spacingFactor: 1.6, avoidOverlap: true
+      padding: 70, spacingFactor: 2.2, avoidOverlap: true, minNodeSpacing: 40,
     };
   }
 
   if (pt === 'cycle') {
-    return { name: 'circle', padding: 40, spacingFactor: 1.5, avoidOverlap: true };
+    return { name: 'circle', padding: 60, spacingFactor: 2.0, avoidOverlap: true };
   }
 
   if (pt === 'bipartite') {
@@ -704,7 +709,7 @@ function getLayout(alert) {
     return {
       name: 'breadthfirst', directed: true,
       roots: srcs.length ? srcs : undefined,
-      padding: 40, spacingFactor: 2.2, avoidOverlap: true, grid: true
+      padding: 60, spacingFactor: 2.6, avoidOverlap: true, grid: true,
     };
   }
 
@@ -713,20 +718,19 @@ function getLayout(alert) {
     return {
       name: 'breadthfirst', directed: true,
       roots: srcs.length ? srcs : undefined,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+      padding: 60, spacingFactor: 2.4, avoidOverlap: true,
     };
   }
 
   if (pt === 'stack') {
-    // Top-to-bottom layered chain — much more readable than horizontal line
     return {
       name: 'breadthfirst', directed: true,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true,
-      roots: nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`)
+      padding: 60, spacingFactor: 2.4, avoidOverlap: true,
+      roots: nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`),
     };
   }
 
-  return { name: 'cose', padding: 40, animate: false, nodeRepulsion: 6000, idealEdgeLength: 120 };
+  return { name: 'cose', padding: 60, animate: false, nodeRepulsion: 12000, idealEdgeLength: 160, nodeOverlap: 20 };
 }
 function renderGraph() {
   if (!currentAlert) return;
@@ -742,20 +746,21 @@ function renderGraph() {
   const needsNumbering = intermediaryNodes.length > 1;
 
   currentAlert.nodes.forEach(n => {
-    const c = SEV_NODE[n.sev]||SEV_NODE.low;
     const r = (n.role||'').toLowerCase();
+    const roleKey = ['source','destination','intermediary'].includes(r) ? r : 'default';
+    const c = ROLE_NODE[roleKey];
     let shortLabel;
     if (r === 'source') {
       shortLabel = 'S';
     } else if (r === 'destination') {
       shortLabel = 'D';
     } else {
-      // intermediary, distributor, coordinator, hub, etc.
       shortLabel = needsNumbering ? `I${intermediaryIdx}` : 'I';
       intermediaryIdx++;
     }
-    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
-      bank:n.bank, vol:n.vol, txn:n.txn, 'background-color':c.bg, 'border-color':c.border 
+    elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:roleKey,
+      bank:n.bank, vol:n.vol, txn:n.txn,
+      'bg':c.bg, 'border-col':c.border, 'text-col':c.text
     }});
   });
   currentAlert.edges.forEach(e => {
@@ -770,28 +775,27 @@ function renderGraph() {
     elements,
     style:[
       { selector:'node', style:{
-        'background-color':'data(background-color)',
-        'border-color':'data(border-color)',
-        'border-width':2, 'color':'#0F172A',
-        'font-size':9, 'font-family':'Poppins, sans-serif',
-        'label':'data(label)', 'text-valign':'center', 'width':38, 'height':38,
+        'background-color': ele => (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).bg,
+        'border-color':     ele => SEV_RING[ele.data('sev')] || (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).border,
+        'border-width': ele => ele.data('sev') === 'high' ? 3 : 2,
+        'color': ele => (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).text,
+        'font-size':11, 'font-family':'Poppins, sans-serif', 'font-weight':700,
+        'label':'data(label)', 'text-valign':'center', 'text-halign':'center',
+        'width':58, 'height':58,
       }},
       { selector:'edge', style:{
         'line-color': e => getImportanceColor(e.data('importance')),
         'target-arrow-color': e => getImportanceColor(e.data('importance')),
         'target-arrow-shape':'triangle', 'curve-style':'bezier',
-        'width': e => 1.5 + (e.data('importance')||0.5) * 2,
-        'font-size':8, 'color':'#475569',
-        'text-background-color': document.body.classList.contains('dark') ? '#1E293B' : '#fff',
-        'text-background-opacity':.9,
-        'text-background-padding':2,
+        'width': e => 1.5 + (e.data('importance')||0.5) * 2.5,
+        'arrow-scale': 1.2,
+        'font-size':9, 'color':'#64748B',
+        'text-background-color':'#0F172A',
+        'text-background-opacity':0.85,
+        'text-background-padding':3,
       }},
-      { selector:'node', style:{
-        'background-color': ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).bg,
-        'border-color':     ele => (SEV_NODE[ele.data('sev')]||SEV_NODE.low).border,
-      }},
-      { selector:'.hl-edge', style:{ 'line-color':'#00579C','target-arrow-color':'#00579C','width':3 } },
-      { selector:'.dim', style:{ opacity:0.15 } },
+      { selector:'.hl-edge', style:{ 'line-color':'#3B82F6','target-arrow-color':'#3B82F6','width':3.5 } },
+      { selector:'.dim', style:{ opacity:0.12 } },
     ],
     layout: getLayout(currentAlert),
     userZoomingEnabled:true, userPanningEnabled:true,
@@ -833,14 +837,14 @@ function renderGraph() {
 function highlightNode(id) {
   if (!cy) return;
   resetHighlight();
-  cy.nodes(`[id="${id}"]`).style({'border-width':4});
+  cy.nodes(`[id="${id}"]`).style({'border-width':5});
   cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
 }
 function resetHighlight() {
   if (!cy) return;
   cy.elements().removeClass('dim hl-edge');
-  cy.nodes().style({'border-width':2});
+  cy.nodes().forEach(n => n.style({'border-width': n.data('sev')==='high' ? 3 : 2}));
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
 }
 
