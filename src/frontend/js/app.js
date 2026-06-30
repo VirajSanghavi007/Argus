@@ -1005,8 +1005,8 @@ function renderGraph() {
     style:[
       { selector:'node', style:{
         'background-color': ele => (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).bg,
-        'border-color':     ele => SEV_RING[ele.data('sev')] || (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).border,
-        'border-width': ele => ele.data('sev') === 'high' ? 3 : 2,
+        'border-color':     ele => (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).border,
+        'border-width': 2,
         'color': ele => (ROLE_NODE[ele.data('role')]||ROLE_NODE.default).text,
         'font-size':11, 'font-family':'Poppins, sans-serif', 'font-weight':700,
         'label':'data(label)', 'text-valign':'center', 'text-halign':'center',
@@ -1078,7 +1078,7 @@ function highlightNode(id) {
 function resetHighlight() {
   if (!cy) return;
   cy.elements().removeClass('dim hl-edge');
-  cy.nodes().forEach(n => n.style({'border-width': n.data('sev')==='high' ? 3 : 2}));
+  cy.nodes().style({'border-width': 2});
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
 }
 
@@ -1484,9 +1484,6 @@ function renderWhitelistPanel(wl) {
     <div class="wl-rule-item">
       <div class="wl-rule-pattern">${pat}</div>
       <div class="wl-rule-reason">${rule.reason}</div>
-      <div style="margin-top:var(--sp-1);display:flex;gap:var(--sp-1);flex-wrap:wrap">
-        ${(rule.exempt_if||[]).map(c=>`<span class="badge badge-light">${c}</span>`).join('')}
-      </div>
     </div>`).join('');
 }
 

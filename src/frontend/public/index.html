@@ -219,10 +219,6 @@
         <div class="chart-wrap"><canvas id="chart-tl"
             aria-label="Timeline chart showing suspicious activity"></canvas></div>
       </div>
-      <div class="timeline-card">
-        <h3>Recent Alerts</h3>
-        <div class="recent-list" id="db-recent" role="list" aria-label="Recent alerts"></div>
-      </div>
       <!-- hidden counters kept for JS state tracking -->
       <span id="dc-confirm" style="display:none">0</span>
       <span id="dc-review"  style="display:none">0</span>
@@ -317,12 +313,9 @@
         <div class="ir-sec">
           <span class="label-up">Decision</span>
           <div class="dec-btns" role="group" aria-label="Decision actions">
-            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span
-                class="kbd-hint">C</span></button>
-            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span
-                class="kbd-hint">R</span></button>
-            <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span
-                class="kbd-hint">D</span></button>
+            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
+            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
+            <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
           </div>
           <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…"
             aria-label="Decision reason"></textarea>
@@ -430,7 +423,6 @@
     <div class="view" id="view-predict" role="tabpanel" aria-labelledby="tab-predict">
       <div class="cases-hdr">
         <h2>Custom Transaction Prediction</h2>
-        <p style="color:var(--muted); font-size:var(--text-sm);">Upload a CSV or paste JSON/CSV to score transactions through the Multi-GNN in real time.</p>
       </div>
 
       <div class="wl-panel">

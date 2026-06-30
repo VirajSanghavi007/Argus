@@ -428,7 +428,7 @@ def _component_to_alert(ci: int, comp: set, G: nx.DiGraph, flagged, explanations
     return {
         "pattern_type": pattern,
         "risk_indicators": risk_indicators,
-        "alert_id":     f"UBI-2026-{ci:04d}",
+        "alert_id":     f"UBI-{ci:04d}",
         "nodes_list":   nodes_list,
         "edges_list":   edges_list,
         "transactions_list": transactions_list,
