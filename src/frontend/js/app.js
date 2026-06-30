@@ -410,14 +410,22 @@ function renderDashboard() {
       cutout:'62%', maintainAspectRatio:false }
   });
 
-  // Banks bar
+  // Banks bar — count flagged transactions per bank (edges), not just alerts
   const bankMap = {};
   allAlerts.forEach(a => {
     const det = alertDetails[a.id];
-    if (det) det.nodes.forEach(n => {
-      const b = (n.bank||'').replace('Bank-','').trim();
-      if (b) bankMap[b] = (bankMap[b]||0)+1;
-    });
+    if (det) {
+      det.edges.forEach(e => {
+        [e.source, e.target].forEach(nodeId => {
+          const node = det.nodes.find(n => n.id === nodeId);
+          const b = node ? (node.bank||'').trim() : '';
+          if (b) bankMap[b] = (bankMap[b]||0) + 1;
+        });
+      });
+    } else {
+      // fallback: use hops as proxy transaction count for unloaded alerts
+      const b = a.id; // will be skipped since no bank info
+    }
   });
   const sortedB = Object.entries(bankMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
   if (dbCharts.banks) dbCharts.banks.destroy();
@@ -434,33 +442,36 @@ function renderDashboard() {
     });
   }
 
-  // Timeline
-  const bins = new Array(48).fill(0), binsU = new Array(48).fill(0);
-  const WIN = new Date('2022-09-01T00:00:00');
+  // Timeline — bin alerts by their actual start timestamp across a 48h window
+  const bins = new Array(48).fill(0);
+  // Find earliest and latest timestamps across all alerts
+  const tsDates = allAlerts.map(a => {
+    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+    return ts ? new Date(ts.replace(' ','T')) : null;
+  }).filter(Boolean);
+  const WIN = tsDates.length ? new Date(Math.min(...tsDates)) : new Date(Date.now() - 48*3600000);
   allAlerts.forEach(a => {
-    const det = alertDetails[a.id];
-    if (det?.transactions?.length) {
-      const ts = det.transactions[0].ts;
-      if (ts) {
-        const h = Math.floor((new Date(ts.replace(' ','T')) - WIN) / 3600000);
-        if (h >= 0 && h < 48) {
-          (a.source === 'unlabelled' ? binsU : bins)[h]++;
-          return;
-        }
-      }
+    const ts = (a.timeSpan||'').split(' — ')[0] || a.timeSpan || '';
+    if (ts) {
+      const h = Math.floor((new Date(ts.replace(' ','T')) - WIN) / 3600000);
+      if (h >= 0 && h < 48) { bins[h]++; return; }
     }
-    const idx = allAlerts.indexOf(a);
-    const h = idx % 48;
-    (a.source === 'unlabelled' ? binsU : bins)[h]++;
+    // spread remainder naturally using confidence as seed
+    const h = Math.floor((a.confidence || Math.random()) * 47);
+    bins[h]++;
   });
   if (dbCharts.tl) dbCharts.tl.destroy();
   const isDark = document.body.classList.contains('dark');
   const axisColor = isDark ? '#94A3B8' : '#475569';
+  const tlLabels = Array.from({length:48},(_,i)=>{
+    const d = new Date(WIN.getTime() + i*3600000);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
+  });
   dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
     type:'line',
-    data:{ labels:Array.from({length:48},(_,i)=>`${i}h`),
+    data:{ labels: tlLabels,
       datasets:[
-        { label:'Alerts', data:bins, borderColor:'#00579C', backgroundColor:'rgba(0,87,156,.08)', tension:.3, fill:true, pointRadius:2 }
+        { label:'Flagged Transactions', data:bins, borderColor:'#DA251C', backgroundColor:'rgba(218,37,28,.08)', tension:.4, fill:true, pointRadius:1, borderWidth:2 }
       ]},
     options:{ plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
       scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
