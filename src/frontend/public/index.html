@@ -259,7 +259,7 @@
         <div class="graph-area">
           <div id="cy" role="img" aria-label="Transaction network graph"></div>
           <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
-            <button class="graph-btn" onclick="cy&&cy.fit()" aria-label="Fit graph to view">Fit</button>
+            <button class="graph-btn" onclick="resetHighlight();cy&&cy.fit(undefined,40)" aria-label="Fit graph to view">Fit</button>
           </div>
         </div>
         <div class="inv-timeline" aria-label="Transaction timeline">

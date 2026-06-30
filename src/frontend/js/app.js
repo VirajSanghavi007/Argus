@@ -410,7 +410,7 @@ function renderDashboard() {
     type:'doughnut',
     data:{ labels:Object.keys(ptMap), datasets:[{ data:Object.values(ptMap),
       backgroundColor:colors, borderColor:document.body.classList.contains('dark')?'#1E293B':'#fff', borderWidth:2 }]},
-    options:{ plugins:{ legend:{ position:'right', labels:{ color:document.body.classList.contains('dark')?'#94A3B8':'#475569', font:{size:10}, boxWidth:12 } } },
+    options:{ animation:false, plugins:{ legend:{ position:'right', labels:{ color:document.body.classList.contains('dark')?'#94A3B8':'#475569', font:{size:10}, boxWidth:12 } } },
       cutout:'62%', maintainAspectRatio:false }
   });
 
@@ -439,7 +439,7 @@ function renderDashboard() {
       type:'bar',
       data:{ labels:sortedB.map(x=>getBankName(x[0])), datasets:[{ data:sortedB.map(x=>x[1]),
         backgroundColor:'#00579C', borderRadius:2 }]},
-      options:{ indexAxis:'y', plugins:{legend:{display:false}},
+      options:{ animation:false, indexAxis:'y', plugins:{legend:{display:false}},
         scales:{ x:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono'}}},
                  y:{ticks:{color:document.body.classList.contains('dark')?'#94A3B8':'#475569',font:{family:'DM Mono',size:10}}} },
         maintainAspectRatio:false }
@@ -479,7 +479,7 @@ function renderDashboard() {
       datasets:[
         { label:'Flagged Transactions', data:bins, borderColor:'#DA251C', backgroundColor:'rgba(218,37,28,.08)', tension:.4, fill:true, pointRadius:1, borderWidth:2 }
       ]},
-    options:{ plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
+    options:{ animation:false, plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
       scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
                y:{ticks:{color:axisColor,font:{size:10}}} },
       maintainAspectRatio:false }
@@ -832,6 +832,8 @@ function renderGraph() {
   });
   cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
   cy.on('tap','node', e => highlightNode(e.target.id()));
+  // Tap on background → reset highlight and fit view
+  cy.on('tap', e => { if (e.target === cy) { resetHighlight(); cy.fit(undefined, 40); } });
 }
 
 function highlightNode(id) {

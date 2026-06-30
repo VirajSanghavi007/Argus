@@ -160,12 +160,11 @@ def run_multignn_pipeline(max_rows: int | None = None) -> tuple[list, dict]:
     logger.info(f"Multi-GNN flagged {len(flagged):,}/{len(df):,} transactions "
                 f"(adaptive threshold {threshold:.4f} = p{ALERT_THRESHOLD_PERCENTILE})")
 
-    # Compute edge importance explanations for flagged transactions (for interpretability).
-    # This shows judges *why* transactions were flagged.
-    from ..models.multignn import explain_transactions
-    flagged_indices = flagged.index.tolist()
-    explanations = explain_transactions(model, bundle, flagged_indices)
-    logger.info(f"Computed GNNExplainer importance for {len(explanations)} flagged edges")
+    # Use raw GNN scores as edge importance — avoids running GNNExplainer (slow, ~minutes).
+    # importance[i] = normalized prob score for that transaction row index.
+    prob_max = float(probs.max()) if probs.max() > 0 else 1.0
+    explanations = {int(idx): float(row["_prob"]) / prob_max
+                    for idx, row in flagged.iterrows()}
 
     # Cluster flagged transactions by connected accounts (account identity = bank:account)
     G = _build_flagged_graph(flagged)
