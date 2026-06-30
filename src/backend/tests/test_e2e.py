@@ -172,6 +172,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "api.db")
     monkeypatch.setattr(db_svc, "_conn", None)
     db_svc.init_db()
+    db_svc.seed_default_users()
 
     from backend.api import main
     from fastapi.testclient import TestClient
@@ -179,7 +180,12 @@ def client(tmp_path, monkeypatch):
     alert = serialize_alerts([_raw_alert(alert_id="mgnn_api")])[0]
     monkeypatch.setattr(main, "ALERTS", {"mgnn_api": alert})
     monkeypatch.setattr(main, "DECISIONS", {})
-    return TestClient(main.app)
+
+    tc = TestClient(main.app, raise_server_exceptions=False)
+    r = tc.post("/auth/login", json={"company_id": "UBI-AML-2026", "username": "admin", "password": "admin123"})
+    token = r.json().get("token", "")
+    tc.headers.update({"X-Session-Token": token})
+    return tc
 
 
 class TestApi:

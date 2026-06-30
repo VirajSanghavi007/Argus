@@ -396,9 +396,10 @@ def train_multignn(csv_path: Path | None = None, max_rows: int | None = None,
     return metrics
 
 
-@torch.no_grad()
 def _predict(model, x, edge_index, edge_attr, label_index, edge_attr_targets, batch_size: int = 8192):
     """Full-batch node encode, then chunk the edge head to bound memory."""
+    if HAS_TORCH:
+        torch.set_grad_enabled(False)
     model.eval()
     h = model.encode_nodes(x, edge_index, edge_attr)
     probs = []
@@ -409,7 +410,6 @@ def _predict(model, x, edge_index, edge_attr, label_index, edge_attr_targets, ba
     return torch.cat(probs).numpy()
 
 
-@torch.no_grad()
 def _evaluate(model, x, edge_index, edge_attr, label_index, y, batch_size=8192,
               edge_attr_targets=None, sweep: bool = False) -> dict:
     from sklearn.metrics import (f1_score, roc_auc_score, precision_score,
@@ -732,7 +732,6 @@ def score_transactions(model, bundle: dict, batch_size: int = 8192) -> np.ndarra
                     bundle["label_index"], bundle["edge_attr"][:E], batch_size)
 
 
-@torch.no_grad()
 def explain_transactions(model, bundle: dict, edge_indices: list[int]) -> dict:
     """Use GNNExplainer to compute edge importance for flagged transactions.
 
