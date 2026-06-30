@@ -254,8 +254,14 @@ def _run_pipeline():
         db.replace_alerts(serialized, scan_id=str(int(time.time())))
         DECISIONS = db.current_decisions()
 
-        _check_drift([a["mlScore"] for a in serialized if a.get("mlScore") is not None])
-        _save_cache()
+        try:
+            _check_drift([a["mlScore"] for a in serialized if a.get("mlScore") is not None])
+        except Exception as drift_err:
+            logger.warning(f"Drift check failed (non-fatal): {drift_err}")
+        try:
+            _save_cache()
+        except Exception as cache_err:
+            logger.warning(f"Cache save failed (non-fatal): {cache_err}")
 
     except Exception as e:
         PIPELINE_ERROR = str(e)
@@ -623,7 +629,7 @@ def status(request: Request):
         unlabelled = sum(1 for a in ALERTS.values() if a.get("source") == "unlabelled")
 
     result = {
-        "status": "error" if (ready and PIPELINE_ERROR) else ("ready" if ready else "loading"),
+        "status": "error" if (ready and PIPELINE_ERROR and not ALERTS) else ("ready" if ready else "loading"),
         "alert_count": len(ALERTS),
         "suppressed_count": len(SUPPRESSED),
         "labelled_count": labelled,
