@@ -569,8 +569,8 @@ async function loadAlertById(id) {
   currentAlert = alertDetails[id];
   currentStep  = -1;
   if (playTimer) { clearInterval(playTimer); playTimer=null; }
-  document.getElementById('play-btn').textContent = '▶ Play';
-
+  const playBtn = document.getElementById('play-btn');
+  if (playBtn) playBtn.textContent = '▶ Play';
   document.querySelectorAll('.ac').forEach(c=>c.classList.remove('active'));
   const card = document.getElementById('ac_'+id);
   if (card) { card.classList.add('active'); card.scrollIntoView({block:'nearest'}); }
@@ -719,8 +719,7 @@ function renderGraph() {
       intermediaryIdx++;
     }
     elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
-      bank:n.bank, vol:n.vol, txn:n.txn }, style:{
-      'background-color':c.bg, 'border-color':c.border,
+      bank:n.bank, vol:n.vol, txn:n.txn, 'background-color':c.bg, 'border-color':c.border 
     }});
   });
   currentAlert.edges.forEach(e => {
