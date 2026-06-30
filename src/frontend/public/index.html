@@ -183,9 +183,9 @@
       <div class="tl-header">
         <span class="tl-counter" id="tl-counter">— / —</span>
         <div class="tl-controls" role="toolbar" aria-label="Timeline controls">
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev <span class="kbd-hint">←</span></button>
-          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play <span class="kbd-hint">Space</span></button>
-          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶ <span class="kbd-hint">→</span></button>
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(-1)" aria-label="Previous transaction">◀ Prev</button>
+          <button class="btn btn-blue" style="font-size:var(--text-sm);padding:5px var(--sp-3)" id="play-btn" onclick="tlPlay()" aria-label="Play or pause timeline">▶ Play</button>
+          <button class="btn btn-ghost" style="font-size:var(--text-sm);padding:5px var(--sp-3)" onclick="stepBy(1)" aria-label="Next transaction">Next ▶</button>
         </div>
       </div>
       <div class="tl-card" id="tl-card"><span style="color:var(--light);font-family:var(--mono);font-size:var(--text-sm)">No transaction selected</span></div>
@@ -200,9 +200,9 @@
     <div class="ir-sec">
       <span class="label-up">Decision</span>
       <div class="dec-btns" role="group" aria-label="Decision actions">
-        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm <span class="kbd-hint">C</span></button>
-        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review <span class="kbd-hint">R</span></button>
-        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss <span class="kbd-hint">D</span></button>
+        <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
+        <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
+        <button class="btn btn-red"   onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
       </div>
       <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…" aria-label="Decision reason"></textarea>
       <div id="dec-status-box" style="display:none" role="status"></div>
@@ -313,6 +313,6 @@
 </div>
 <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-<script src="/static/js/app.js?v=9"></script>
+<script src="/static/js/app.js?v=10"></script>
 </body>
 </html>

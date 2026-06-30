@@ -529,12 +529,6 @@ function renderSidebar() {
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
-    const conf   = Math.round((a.confidence||0)*100);
-    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
-    const mlBg  = mlPct>=70 ? 'var(--red-bg)'   : mlPct>=40 ? 'var(--amber-bg)'  : 'var(--green-bg)';
-    const mlClr = mlPct>=70 ? 'var(--red)'      : mlPct>=40 ? 'var(--amber)'     : 'var(--green)';
-    const mlBd  = mlPct>=70 ? 'var(--red-bd)'   : mlPct>=40 ? 'var(--amber-bd)'  : 'var(--green-bd)';
-    const mlBadge = mlPct != null ? `<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>` : '';
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
@@ -543,9 +537,7 @@ function renderSidebar() {
       <div class="ac-badges">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlBadge}
       </div>
-      <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%"></div></div>
       <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
     </div>`;
   }).join('');
@@ -583,7 +575,7 @@ async function loadAlertById(id) {
   document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
   document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
   document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = `${Math.round((currentAlert.confidence||0)*100)}%`;
+  document.getElementById('is-conf').textContent  = `—`;
   document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
 
   renderGraph();
@@ -785,7 +777,7 @@ function renderGraph() {
     tt.style.display='block';
     document.getElementById('tt-id').textContent   = `${edgeData.source} → ${edgeData.target}`;
     document.getElementById('tt-bank').textContent = edgeData.label||'—';
-    document.getElementById('tt-role').textContent = `Importance: ${Math.round(edgeData.importance * 100)}%`;
+    document.getElementById('tt-role').textContent = '';
     document.getElementById('tt-vol').textContent  = '—';
     document.getElementById('tt-txn').textContent  = '—';
   });
@@ -841,7 +833,6 @@ function applyStep(idx) {
       <span>Recv: <strong>${tx.recv}</strong></span>
       <span>${tx.fromBank} → ${tx.toBank}</span>
       <span>${tx.ts||'—'}</span>
-      <span style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:${impColor};font-weight:500">🔍 ML Importance: ${Math.round(imp*100)}%</span>
     </div>`;
   if (cy) {
     cy.edges().removeClass('hl-edge');
@@ -1245,52 +1236,6 @@ function toast(msg, type='info') {
   setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),300); },3000);
 }
 
-/* ════════════════════════════════════════════
-   KEYBOARD SHORTCUTS (Investigate view)
-════════════════════════════════════════════ */
-document.addEventListener('keydown', e => {
-  // Don't fire shortcuts when typing in inputs
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
-  const investigateActive = document.getElementById('view-investigate')?.classList.contains('active');
-
-  if (investigateActive && currentAlert) {
-    switch(e.key.toLowerCase()) {
-      case 'j': // Next alert
-        e.preventDefault();
-        navigateAlert(1);
-        break;
-      case 'k': // Previous alert
-        e.preventDefault();
-        navigateAlert(-1);
-        break;
-      case 'c': // Confirm
-        e.preventDefault();
-        postDecision('confirm');
-        break;
-      case 'r': // Review
-        e.preventDefault();
-        postDecision('review');
-        break;
-      case 'd': // Dismiss
-        e.preventDefault();
-        postDecision('dismiss');
-        break;
-      case 'arrowleft': // Prev transaction
-        e.preventDefault();
-        stepBy(-1);
-        break;
-      case 'arrowright': // Next transaction
-        e.preventDefault();
-        stepBy(1);
-        break;
-      case ' ': // Play/pause timeline
-        e.preventDefault();
-        tlPlay();
-        break;
-    }
-  }
-});
 
 function navigateAlert(direction) {
   if (!currentAlert || !allAlerts.length) return;
