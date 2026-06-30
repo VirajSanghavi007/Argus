@@ -75,10 +75,10 @@ function playCinematicIntro() {
         const q = particles[j];
         const dx = p.x - q.x, dy = p.y - q.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
+                if (dist < 120) {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
-          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.08})`;
+          ctx.strokeStyle = `rgba(0, 87, 156, ${(1 - dist / 120) * 0.12})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
@@ -113,14 +113,14 @@ function playCinematicIntro() {
     shield.style.opacity = '1'; shield.style.transform = 'scale(1)';
   }, 150);
 
-  // Red-blue line extends
-  setTimeout(() => { line.style.width = '280px'; }, 400);
-
   // Bank name types in
   setTimeout(() => {
     name.style.transition = 'opacity .3s ease, transform .3s ease';
     name.style.opacity = '1'; name.style.transform = 'translateY(0)';
-  }, 500);
+  }, 400);
+
+  // Red-blue line extends
+  setTimeout(() => { line.style.width = '280px'; }, 500);
 
   // Sub text
   setTimeout(() => {
@@ -382,6 +382,7 @@ function showView(name) {
   if (name === 'search')      runSearch('', 'all');
   if (name === 'validation')  loadValidation();
   if (name === 'whitelist')   loadWhitelist();
+  if (name === 'predict')     { /* predict view needs no initial render */ }
 }
 
 /* ════════════════════════════════════════════
@@ -476,7 +477,7 @@ function renderDashboard() {
   document.getElementById('db-recent').innerHTML = allAlerts.slice(0,5).map(a => `
     <div class="mini-card" onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
          onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
-      <div><div class="mini-card-name">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+      <div><div class="mini-card-name">${formatPatternName(a.patternType)}</div>
       <div class="mini-card-sub">${a.sub}</div></div>
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
     </div>`).join('');
@@ -502,22 +503,14 @@ function fmtMoney(n) {
 /* ════════════════════════════════════════════
    INVESTIGATE SIDEBAR
 ════════════════════════════════════════════ */
-function setSrc(v,el) {
-  srcFilter=v;
-  document.querySelectorAll('#src-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-function setSev(v,el) {
-  sevFilter=v;
-  document.querySelectorAll('#sev-pills .filter-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
-}
-
 function renderSidebar() {
   const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
+  const patFilter = document.getElementById('inv-pattern-filter')?.value || 'all';
+  const prioFilter = document.getElementById('inv-priority-filter')?.value || 'all';
+
   const filtered = allAlerts.filter(a => {
-    if (srcFilter!=='all' && a.source!==srcFilter) return false;
-    if (sevFilter!=='all' && a.severity!==sevFilter) return false;
+    if (patFilter !== 'all' && a.patternType !== patFilter) return false;
+    if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
     if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
              !a.id.toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
     return true;
@@ -529,16 +522,36 @@ function renderSidebar() {
     const active = (currentAlert?.id === a.id) ? 'active' : '';
     const sevCls = `sev-${a.severity}`;
     const decDot = dec ? `<div class="dec-indicator ${dec.decision}"></div>` : '';
+    const conf   = Math.round((a.confidence||0)*100);
+    const mlPct  = a.mlScore != null ? Math.round(a.mlScore*100) : null;
     return `<div class="ac ${active} ${sevCls}" id="ac_${a.id}" onclick="loadAlertById('${a.id}')"
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
       ${decDot}
-      <div class="ac-name">${formatPatternName(a.patternType)}</div>
-      <div class="ac-badges">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
+        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${a.id.toUpperCase().replace('_', '-')}</div>
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
         <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
       </div>
-      <div class="ac-meta">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n · ${a.txn_count}tx</div>
+      <div class="ac-meta" style="margin-bottom:var(--sp-2)">${a.node_count}n · ${a.txn_count}tx</div>
+      <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:var(--sp-3)">
+        ${formatPatternName(a.patternType)}
+      </div>
+      
+      <div style="display:flex; gap:var(--sp-4); margin-bottom:var(--sp-2); font-family:var(--mono);">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Amount</span>
+          <span style="font-size:var(--text-base); font-weight:700; color:var(--blue);">${a.totalMoved}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Time</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${(a.timeSpan || '').split(' ')[0]}</span>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:9px; text-transform:uppercase; color:var(--muted); font-weight:700; letter-spacing:0.05em;">Hops</span>
+          <span style="font-size:var(--text-base); font-weight:600; color:var(--text);">${a.hops}</span>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -558,24 +571,33 @@ async function loadAlertById(id) {
   currentAlert = alertDetails[id];
   currentStep  = -1;
   if (playTimer) { clearInterval(playTimer); playTimer=null; }
-  document.getElementById('play-btn').textContent = '▶ Play';
-
+  const playBtn = document.getElementById('play-btn');
+  if (playBtn) playBtn.textContent = '▶ Play';
   document.querySelectorAll('.ac').forEach(c=>c.classList.remove('active'));
   const card = document.getElementById('ac_'+id);
   if (card) { card.classList.add('active'); card.scrollIntoView({block:'nearest'}); }
 
   // Route bar
   const route = currentAlert.routeNodes||[];
-  document.getElementById('route-bar').innerHTML = route.map((n,i) =>
+  const getRoleRank = (nId) => {
+    const node = (currentAlert.nodes||[]).find(n => n.id === nId);
+    if (!node) return 1;
+    const r = (node.role||'').toLowerCase();
+    if (r === 'source') return 0;
+    if (r === 'destination') return 2;
+    return 1;
+  };
+  const sortedRoute = [...route].sort((a,b) => getRoleRank(a) - getRoleRank(b));
+  document.getElementById('route-bar').innerHTML = sortedRoute.map((n,i) =>
     `<span class="route-pill" onclick="highlightNode('${n}')" role="button" tabindex="0"
-           onkeydown="if(event.key==='Enter')highlightNode('${n}')">${n}</span>${i<route.length-1?'<span class="route-arrow">→</span>':''}`
+           onkeydown="if(event.key==='Enter')highlightNode('${n}')">${n}</span>${i<sortedRoute.length-1?'<span class="route-arrow">→</span>':''}`
   ).join('');
 
   // Stats strip
   document.getElementById('is-moved').textContent = currentAlert.totalMoved||'—';
   document.getElementById('is-span').textContent  = currentAlert.timeSpan||'—';
   document.getElementById('is-hops').textContent  = currentAlert.hops??'—';
-  document.getElementById('is-conf').textContent  = `—`;
+  document.getElementById('is-conf').textContent  = currentAlert.confidence ? Math.round(currentAlert.confidence*100) + '%' : '—';
   document.getElementById('is-pat').textContent   = formatPatternName(currentAlert.patternType||'');
 
   renderGraph();
@@ -709,8 +731,7 @@ function renderGraph() {
       intermediaryIdx++;
     }
     elements.push({ data:{ id:n.id, label:shortLabel, sev:n.sev, role:n.role,
-      bank:n.bank, vol:n.vol, txn:n.txn }, style:{
-      'background-color':c.bg, 'border-color':c.border,
+      bank:n.bank, vol:n.vol, txn:n.txn, 'background-color':c.bg, 'border-color':c.border 
     }});
   });
   currentAlert.edges.forEach(e => {
@@ -783,11 +804,15 @@ function renderGraph() {
   });
   cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
   cy.on('tap','node', e => highlightNode(e.target.id()));
+  cy.on('tap', e => { if (e.target === cy) resetHighlight(); });
 }
 
 function highlightNode(id) {
   if (!cy) return;
+  const isAlreadyActive = document.querySelector('.route-pill.active-node')?.textContent === id;
   resetHighlight();
+  if (isAlreadyActive) return; // If it was already active, we just reset and we're done
+  
   cy.nodes(`[id="${id}"]`).style({'border-width':4});
   cy.elements().not(`[id="${id}"]`).not(cy.nodes(`[id="${id}"]`).connectedEdges()).addClass('dim');
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.toggle('active-node', p.textContent===id));
@@ -797,12 +822,6 @@ function resetHighlight() {
   cy.elements().removeClass('dim hl-edge');
   cy.nodes().style({'border-width':2});
   document.querySelectorAll('.route-pill').forEach(p=>p.classList.remove('active-node'));
-}
-function downloadPNG() {
-  if (!cy) return;
-  const a = document.createElement('a');
-  a.href = cy.png({scale:2, bg: document.body.classList.contains('dark') ? '#0D1B2A' : '#F8FAFC'});
-  a.download = `aml-${currentAlert?.id||'graph'}.png`; a.click();
 }
 
 /* ════════════════════════════════════════════
@@ -884,29 +903,11 @@ function renderRightPanel() {
   const sevColor = SEV_COLOR[a.severity]||'var(--muted)';
 
   document.getElementById('ir-pattern-sec').innerHTML = `
-    <div class="ir-pattern-name" style="color:${sevColor}">${PATTERN_ICONS[a.patternType]||'?'} ${formatPatternName(a.patternType)}</div>
+    <div class="ir-pattern-name" style="color:${sevColor}">${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
       <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-      <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-      <span class="badge badge-light">${Math.round((a.confidence||0)*100)}% CONF</span>
-      ${a.mlScore != null ? `<span class="badge" style="background:${a.mlScore>=0.7?'var(--red-bg)':a.mlScore>=0.4?'var(--amber-bg)':'var(--green-bg)'};color:${a.mlScore>=0.7?'var(--red)':a.mlScore>=0.4?'var(--amber)':'var(--green)'};border:1px solid ${a.mlScore>=0.7?'var(--red-bd)':a.mlScore>=0.4?'var(--amber-bd)':'var(--green-bd)'}">🤖 ML ${Math.round(a.mlScore*100)}%</span>` : ''}
     </div>
     <div class="ir-desc">${a.description||''}</div>`;
-
-  // Source / signals
-  const srcEl = document.getElementById('ir-source-sec');
-  srcEl.style.display='block';
-  const sigs = a.signalsTriggered||[];
-  let srcHtml = `<span class="label-up">Detection Source</span>`;
-  if (a.source==='labelled') {
-    srcHtml += `<div class="signal-chip blue">🏷 Is Laundering label filter</div>`;
-  } else if (a.source==='both') {
-    srcHtml += `<div class="signal-chip" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)">⭐ Cross-validated by both modes</div>`;
-  } else {
-    srcHtml += sigs.map(s=>`<div class="signal-chip">${SIGNAL_ICONS[s]||'•'} ${s}</div>`).join('') ||
-      `<span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No signals recorded</span>`;
-  }
-  srcEl.innerHTML = srcHtml;
 
   // Roles
   const roleEl = document.getElementById('ir-roles-sec');
@@ -980,9 +981,7 @@ function renderCaseManager() {
       <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${a.id}</td>
       <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType)}</td>
       <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span></td>
-      <td>${Math.round((a.confidence||0)*100)}%</td>
       <td>${a.totalMoved}</td>
-      <td><span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span></td>
       <td style="color:${decColors[dec.decision]};font-weight:600;font-family:var(--sans)">${dec.decision.toUpperCase()}</td>
       <td style="color:var(--muted);font-size:var(--text-sm)">${dec.reason||'—'}</td>
       <td><button class="btn btn-ghost" style="font-size:var(--text-xs);padding:var(--sp-1) var(--sp-2)" onclick="jumpInvestigate('${a.id}')">Re-open</button></td>
@@ -992,11 +991,11 @@ function renderCaseManager() {
 function exportCSV() {
   const rows = allAlerts.filter(a=>decisions[a.id]);
   if (!rows.length) { toast('No decisions to export','warning'); return; }
-  const hdr = 'Alert ID,Pattern,Severity,Confidence,Total Moved,Source,Decision,Reason';
+  const hdr = 'Alert ID,Pattern,Severity,Total Moved,Decision,Reason';
   const lines = rows.map(a=>{
     const d=decisions[a.id];
-    return [a.id,formatPatternName(a.patternType),a.severity,`${Math.round((a.confidence||0)*100)}%`,
-      a.totalMoved,a.source||'',d.decision,(d.reason||'').replace(/,/g,' ')].join(',');
+    return [a.id,formatPatternName(a.patternType),a.severity,
+      a.totalMoved,d.decision,(d.reason||'').replace(/,/g,' ')].join(',');
   });
   const blob=new Blob([[hdr,...lines].join('\n')],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
@@ -1065,21 +1064,16 @@ function runSearch(q, type='auto') {
   const cards = res.map(a => {
     const patLabel = a.name || formatPatternName(a.patternType);
     const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
-    const mlBg  = mlPct != null ? (mlPct>=70?'var(--red-bg)':mlPct>=40?'var(--amber-bg)':'var(--green-bg)') : '';
-    const mlClr = mlPct != null ? (mlPct>=70?'var(--red)':mlPct>=40?'var(--amber)':'var(--green)') : '';
-    const mlBd  = mlPct != null ? (mlPct>=70?'var(--red-bd)':mlPct>=40?'var(--amber-bd)':'var(--green-bd)') : '';
     return `
     <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
          onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
          aria-label="${patLabel}, ${a.severity} severity"
          onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
       <div style="font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-bottom:var(--sp-2);color:var(--text)">
-        ${PATTERN_ICONS[a.patternType]||'?'} ${patLabel}
+        ${patLabel}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
         <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-        <span class="badge ${SRC_BADGE[a.source]||'badge-blue'}">${SRC_LABEL[a.source]||''}</span>
-        ${mlPct!=null?`<span class="badge" style="background:${mlBg};color:${mlClr};border:1px solid ${mlBd}">ML ${mlPct}%</span>`:''}
       </div>
       <div style="font-size:var(--text-sm);color:var(--muted);font-family:var(--mono);margin-bottom:var(--sp-1)">${a.sub||''}</div>
       <div style="font-size:var(--text-sm);color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
@@ -1237,6 +1231,42 @@ function toast(msg, type='info') {
 }
 
 
+/* ════════════════════════════════════════════
+   KEYBOARD SHORTCUTS (Investigate view)
+════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  // Don't fire shortcuts when typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  const investigateActive = document.getElementById('view-investigate')?.classList.contains('active');
+
+  if (investigateActive && currentAlert) {
+    switch(e.key.toLowerCase()) {
+      case 'j': // Next alert
+        e.preventDefault();
+        navigateAlert(1);
+        break;
+      case 'k': // Previous alert
+        e.preventDefault();
+        navigateAlert(-1);
+        break;
+
+      case 'arrowleft': // Prev transaction
+        e.preventDefault();
+        stepBy(-1);
+        break;
+      case 'arrowright': // Next transaction
+        e.preventDefault();
+        stepBy(1);
+        break;
+      case ' ': // Play/pause timeline
+        e.preventDefault();
+        tlPlay();
+        break;
+    }
+  }
+});
+
 function navigateAlert(direction) {
   if (!currentAlert || !allAlerts.length) return;
   const currentIdx = allAlerts.findIndex(a => a.id === currentAlert.id);
@@ -1249,3 +1279,72 @@ function navigateAlert(direction) {
 
 /* ═══ BOOT ═══ */
 // Auth screen handles init() — no auto-start
+
+/* ════════════════════════════════════════════
+   PREDICTION
+════════════════════════════════════════════ */
+async function runPrediction() {
+  const fileInput = document.getElementById('predict-file');
+  const dataInput = document.getElementById('predict-data').value.trim();
+  const tbody = document.getElementById('predict-tbody');
+  const emptyMsg = document.getElementById('predict-empty');
+  const thresholdLabel = document.getElementById('predict-threshold');
+  
+  if (!fileInput.files.length && !dataInput) {
+    toast('Please upload a CSV or paste data', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  if (fileInput.files.length > 0) {
+    formData.append('file', fileInput.files[0]);
+  } else if (dataInput) {
+    formData.append('data', dataInput);
+  }
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:var(--sp-4);">Running prediction model...</td></tr>';
+  emptyMsg.style.display = 'none';
+  thresholdLabel.textContent = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/predict`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Prediction failed');
+    }
+    
+    const data = await res.json();
+    thresholdLabel.textContent = `Model Threshold: ${data.threshold}`;
+    
+    if (!data.transactions || data.transactions.length === 0) {
+      tbody.innerHTML = '';
+      emptyMsg.textContent = 'No transactions processed.';
+      emptyMsg.style.display = 'block';
+      return;
+    }
+    
+    tbody.innerHTML = data.transactions.map(tx => {
+      const flagged = tx.flagged ? '<span class="badge badge-red">Flagged</span>' : '<span class="badge badge-green">OK</span>';
+      return `<tr>
+        <td style="font-family:var(--mono);">${tx.Timestamp || ''}</td>
+        <td>${tx['From Bank'] || ''}:${tx.Account || ''}</td>
+        <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
+        <td style="color:var(--blue);font-family:var(--mono);">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
+        <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
+        <td style="font-family:var(--mono);">${tx.ml_score ? tx.ml_score.toFixed(4) : '0.0000'}</td>
+        <td>${flagged}</td>
+      </tr>`;
+    }).join('');
+    
+    toast('Prediction complete', 'success');
+  } catch (err) {
+    tbody.innerHTML = '';
+    emptyMsg.textContent = `Error: ${err.message}`;
+    emptyMsg.style.display = 'block';
+    toast(err.message, 'error');
+  }
+}
