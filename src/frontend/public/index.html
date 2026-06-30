@@ -333,9 +333,7 @@
               <th scope="col">Alert ID</th>
               <th scope="col">Pattern</th>
               <th scope="col">Severity</th>
-              <th scope="col">Confidence</th>
               <th scope="col">Total Moved</th>
-              <th scope="col">Source</th>
               <th scope="col">Decision</th>
               <th scope="col">Reason</th>
               <th scope="col"><span class="sr-only">Actions</span></th>
@@ -352,15 +350,6 @@
     <div class="view" id="view-whitelist" role="tabpanel" aria-labelledby="tab-whitelist">
       <div style="display:flex;flex-direction:column;gap:0">
         <h2 style="font-family:var(--sans);font-weight:700;font-size:var(--text-xl)">Whitelist / Exemption System</h2>
-      </div>
-      <div class="verdict-banner">
-        <div class="verdict-icon" aria-hidden="true">🛡️</div>
-        <div>
-          <div class="verdict-title">False Positive Reduction</div>
-          <div class="verdict-desc">Business accounts and known financial institutions are exempt from certain detection
-            patterns to reduce false positives.
-            Fully-exempt clusters are suppressed (not deleted) and visible in the suppressed alerts table below.</div>
-        </div>
       </div>
       <div class="wl-grid">
         <div class="wl-panel">
