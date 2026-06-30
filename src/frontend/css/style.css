@@ -222,6 +222,11 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   cursor:pointer;transition:all .15s ease}
 .filter-pill:hover{border-color:var(--blue);color:var(--blue)}
 .filter-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.sort-pill{font-family:var(--sans);font-size:var(--text-sm);font-weight:600;padding:var(--sp-1) var(--sp-4);
+  border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);color:var(--muted);
+  transition:all .15s ease;flex:1}
+.sort-pill:hover{border-color:var(--blue);color:var(--blue)}
+.sort-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
 .filter-pill.blue-pill  {border-color:var(--blue-bd);color:var(--blue);background:var(--blue-bg)}
 .filter-pill.purple-pill{border-color:var(--purple-bd);color:var(--purple);background:var(--purple-bg)}
 .filter-pill.amber-pill {border-color:var(--amber-bd);color:var(--amber);background:var(--amber-bg)}

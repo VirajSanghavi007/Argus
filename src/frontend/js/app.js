@@ -269,6 +269,7 @@ let currentStep  = -1;
 let playTimer    = null;
 let srcFilter    = 'all';
 let sevFilter    = 'all';
+let sortOrder    = 'recent';
 let caseFilter   = 'all';
 let dbCharts     = {};
 
@@ -509,18 +510,27 @@ function fmtMoney(n) {
 /* ════════════════════════════════════════════
    INVESTIGATE SIDEBAR
 ════════════════════════════════════════════ */
+function setSortOrder(order, el) {
+  sortOrder = order;
+  document.querySelectorAll('.sort-pill').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderSidebar();
+}
+
 function renderSidebar() {
   const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
   const patFilter = document.getElementById('inv-pattern-filter')?.value || 'all';
   const prioFilter = document.getElementById('inv-priority-filter')?.value || 'all';
 
-  const filtered = allAlerts.filter(a => {
+  let filtered = allAlerts.filter(a => {
     if (patFilter !== 'all' && a.patternType !== patFilter) return false;
     if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
     if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
              !a.id.toLowerCase().includes(q) && !formatAlertId(a.id).toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
     return true;
   });
+  // Recent = high confidence first (default sort), Older = low confidence first
+  if (sortOrder === 'older') filtered = [...filtered].reverse();
   const el = document.getElementById('alert-list');
   if (!el) return;
   el.innerHTML = filtered.map(a => {
@@ -659,44 +669,59 @@ function getLayout(alert) {
   const nodes = alert.nodes || [];
 
   if (pt === 'fanOut') {
-    const dist = nodes.find(n => n.role === 'Distributor') || nodes[0];
+    // Hub in centre, destinations radiate outward like a star
+    const src = nodes.find(n => ['source','distributor'].includes((n.role||'').toLowerCase()));
     return {
-      name: 'breadthfirst', directed: true,
-      roots: dist ? [`#${dist.id}`] : undefined,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+      name: 'concentric',
+      concentric: ele => ele.data('id') === src?.id ? 10 : 1,
+      levelWidth: () => 1,
+      padding: 50, spacingFactor: 1.6, avoidOverlap: true
     };
   }
 
   if (pt === 'fanIn') {
+    // Senders on outer ring, collector in centre
+    const dst = nodes.find(n => ['destination','collector'].includes((n.role||'').toLowerCase()));
     return {
-      name: 'breadthfirst', directed: false,
-      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+      name: 'concentric',
+      concentric: ele => ele.data('id') === dst?.id ? 10 : 1,
+      levelWidth: () => 1,
+      padding: 50, spacingFactor: 1.6, avoidOverlap: true
     };
   }
 
   if (pt === 'cycle') {
-    return { name: 'circle', padding: 30, spacingFactor: 1.3, avoidOverlap: true };
+    return { name: 'circle', padding: 40, spacingFactor: 1.5, avoidOverlap: true };
   }
 
   if (pt === 'bipartite') {
-    const coords  = nodes.filter(n => n.role === 'Coordinator');
-    const root = coords.length ? coords.map(n => `#${n.id}`) : undefined;
+    const srcs = nodes.filter(n => ['source','distributor'].includes((n.role||'').toLowerCase())).map(n=>`#${n.id}`);
     return {
       name: 'breadthfirst', directed: true,
-      roots: root,
-      padding: 40, spacingFactor: 1.8, avoidOverlap: true
+      roots: srcs.length ? srcs : undefined,
+      padding: 40, spacingFactor: 2.2, avoidOverlap: true, grid: true
     };
   }
 
   if (pt === 'scatterGather' || pt === 'gatherScatter') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.8, avoidOverlap: true };
+    const srcs = nodes.filter(n => ['source','distributor'].includes((n.role||'').toLowerCase())).map(n=>`#${n.id}`);
+    return {
+      name: 'breadthfirst', directed: true,
+      roots: srcs.length ? srcs : undefined,
+      padding: 40, spacingFactor: 2.0, avoidOverlap: true
+    };
   }
 
   if (pt === 'stack') {
-    return { name: 'breadthfirst', directed: true, padding: 30, spacingFactor: 1.5, avoidOverlap: true };
+    // Top-to-bottom layered chain — much more readable than horizontal line
+    return {
+      name: 'breadthfirst', directed: true,
+      padding: 40, spacingFactor: 2.0, avoidOverlap: true,
+      roots: nodes.filter(n => (n.role||'').toLowerCase() === 'source').map(n=>`#${n.id}`)
+    };
   }
 
-  return { name: 'cose', padding: 30, animate: false, nodeRepulsion: 4500 };
+  return { name: 'cose', padding: 40, animate: false, nodeRepulsion: 6000, idealEdgeLength: 120 };
 }
 function renderGraph() {
   if (!currentAlert) return;

@@ -178,11 +178,6 @@
       <div class="db-bottom">
         <div
           style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
-          <span class="label-up">Recent Alerts</span>
-          <div class="recent-list" id="db-recent" role="list" aria-label="Recent alerts"></div>
-        </div>
-        <div
-          style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)">
           <span class="label-up">Decision Summary</span>
           <table class="dec-summary-table" aria-label="Decision summary">
             <tr>
@@ -233,6 +228,10 @@
               <option value="low">Low</option>
             </select>
           </div>
+        </div>
+        <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3)">
+          <button class="sort-pill active" id="sort-recent" onclick="setSortOrder('recent',this)">Recent</button>
+          <button class="sort-pill" id="sort-older" onclick="setSortOrder('older',this)">Older</button>
         </div>
         <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
       </div>
