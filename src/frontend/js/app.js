@@ -978,7 +978,6 @@ function renderCaseManager() {
       <td style="font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)">${a.id}</td>
       <td style="font-family:var(--sans);font-weight:600">${formatPatternName(a.patternType)}</td>
       <td><span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span></td>
-      <td>${Math.round((a.confidence||0)*100)}%</td>
       <td>${a.totalMoved}</td>
       <td style="color:${decColors[dec.decision]};font-weight:600;font-family:var(--sans)">${dec.decision.toUpperCase()}</td>
       <td style="color:var(--muted);font-size:var(--text-sm)">${dec.reason||'—'}</td>
@@ -989,11 +988,11 @@ function renderCaseManager() {
 function exportCSV() {
   const rows = allAlerts.filter(a=>decisions[a.id]);
   if (!rows.length) { toast('No decisions to export','warning'); return; }
-  const hdr = 'Alert ID,Pattern,Severity,Confidence,Total Moved,Source,Decision,Reason';
+  const hdr = 'Alert ID,Pattern,Severity,Total Moved,Decision,Reason';
   const lines = rows.map(a=>{
     const d=decisions[a.id];
-    return [a.id,formatPatternName(a.patternType),a.severity,`${Math.round((a.confidence||0)*100)}%`,
-      a.totalMoved,a.source||'',d.decision,(d.reason||'').replace(/,/g,' ')].join(',');
+    return [a.id,formatPatternName(a.patternType),a.severity,
+      a.totalMoved,d.decision,(d.reason||'').replace(/,/g,' ')].join(',');
   });
   const blob=new Blob([[hdr,...lines].join('\n')],{type:'text/csv'});
   const url=URL.createObjectURL(blob);

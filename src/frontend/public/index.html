@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=8" />
+  <link rel="stylesheet" href="/static/css/style.css?v=10" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -53,13 +53,6 @@
         <button class="btn btn-blue auth-submit" type="submit">Authenticate</button>
         <div id="auth-error" class="auth-error" style="display:none"></div>
       </form>
-
-
-
-      <div class="auth-footer">
-        <span>🔒 256-bit TLS Encrypted</span>
-        <span>SOC 2 Compliant</span>
-      </div>
     </div>
   </div>
 
@@ -149,16 +142,16 @@
           <div class="card-num blue" id="st-total">—</div>
           <div class="card-sub">Labelled + Unlabelled</div>
         </div>
-        <div class="color-card green"><span class="label-up">Money Flagged</span>
-          <div class="card-num green" id="st-money">—</div>
+        <div class="color-card blue"><span class="label-up">Money Flagged</span>
+          <div class="card-num blue" id="st-money">—</div>
           <div class="card-sub">Across all alerts</div>
         </div>
-        <div class="color-card red"><span class="label-up">High Severity</span>
-          <div class="card-num red" id="st-high">—</div>
+        <div class="color-card blue"><span class="label-up">High Severity</span>
+          <div class="card-num blue" id="st-high">—</div>
           <div class="card-sub">Requires immediate review</div>
         </div>
-        <div class="color-card amber"><span class="label-up">Decisions Made</span>
-          <div class="card-num amber" id="st-dec">—</div>
+        <div class="color-card blue"><span class="label-up">Decisions Made</span>
+          <div class="card-num blue" id="st-dec">—</div>
           <div class="card-sub">Confirmed / reviewed / dismissed</div>
         </div>
       </div>
@@ -296,8 +289,10 @@
         <div class="ir-sec">
           <span class="label-up">Decision</span>
           <div class="dec-btns" role="group" aria-label="Decision actions">
-            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓ Confirm</button>
-            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠ Review</button>
+            <button class="btn btn-green" onclick="postDecision('confirm')" aria-label="Confirm alert">✓
+              Confirm</button>
+            <button class="btn btn-amber" onclick="postDecision('review')" aria-label="Mark for review">⚠
+              Review</button>
             <button class="btn btn-red" onclick="postDecision('dismiss')" aria-label="Dismiss alert">✗ Dismiss</button>
           </div>
           <textarea class="dec-reason-inp" id="dec-reason" placeholder="Optional reason…"
@@ -330,7 +325,6 @@
               <th scope="col">Alert ID</th>
               <th scope="col">Pattern</th>
               <th scope="col">Severity</th>
-              <th scope="col">Confidence</th>
               <th scope="col">Total Moved</th>
               <th scope="col">Decision</th>
               <th scope="col">Reason</th>

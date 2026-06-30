@@ -113,14 +113,14 @@ label,h1,h2,h3,h4,.label-up{font-family:var(--sans)}
 
 /* ── Navbar ── */
 nav{background:var(--surface);border-bottom:1px solid var(--border);
-  height:72px;display:flex;align-items:center;padding:0 var(--sp-6);gap:var(--sp-8);
+  height:80px;display:flex;align-items:center;padding:0 var(--sp-6);gap:var(--sp-8);
   flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .nav-brand{display:flex;flex-direction:column;gap:1px;min-width:0}
 .nav-title{font-family:var(--sans);font-weight:700;font-size:var(--text-base);color:var(--text);white-space:nowrap}
 .nav-sub{font-family:var(--mono);font-size:var(--text-xs);color:var(--muted);letter-spacing:.04em}
 .nav-tabs{display:flex;gap:0;flex:1}
-.nav-tab{padding:0 var(--sp-4);height:72px;display:flex;align-items:center;cursor:pointer;
-  font-family:var(--sans);font-size:var(--text-sm);font-weight:600;letter-spacing:.08em;
+.nav-tab{padding:0 var(--sp-5);height:80px;display:flex;align-items:center;cursor:pointer;
+  font-family:var(--sans);font-size:var(--text-base);font-weight:600;letter-spacing:.08em;
   text-transform:uppercase;color:var(--muted);border:none;background:none;
   border-bottom:2px solid transparent;transition:all .15s ease;white-space:nowrap}
 .nav-tab:hover{color:var(--text);background:var(--row-alt)}
@@ -171,18 +171,21 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
 /* ── Colored cards ── */
 .color-card{border:1px solid;border-radius:var(--r);padding:var(--sp-5);
-  border-left:var(--sp-1) solid;display:flex;flex-direction:column;gap:var(--sp-2)}
-.color-card.blue  {background:var(--blue-bg);border-color:var(--blue-bd);border-left-color:var(--blue)}
-.color-card.green {background:var(--green-bg);border-color:var(--green-bd);border-left-color:var(--green)}
-.color-card.red   {background:var(--red-bg);border-color:var(--red-bd);border-left-color:var(--red)}
-.color-card.amber {background:var(--amber-bg);border-color:var(--amber-bd);border-left-color:var(--amber)}
-.color-card.purple{background:var(--purple-bg);border-color:var(--purple-bd);border-left-color:var(--purple)}
-.color-card.teal  {background:var(--teal-bg);border-color:var(--teal-bd);border-left-color:var(--teal)}
-.card-num{font-family:var(--sans);font-weight:700;font-size:2.2rem;line-height:1.1}
-.card-num.blue   {color:var(--blue)}
-.card-num.green  {color:var(--green)}
-.card-num.red    {color:var(--red)}
-.card-num.amber  {color:var(--amber)}
+  border-left:var(--sp-1) solid;display:flex;flex-direction:column;gap:var(--sp-2);
+  background:var(--surface);border-color:var(--border);border-left-color:var(--border);transition:all .2s ease}
+.color-card:hover.blue  {background:var(--blue-bg);border-color:var(--blue-bd);border-left-color:var(--blue);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.color-card:hover.green {background:var(--green-bg);border-color:var(--green-bd);border-left-color:var(--green);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.color-card:hover.red   {background:var(--red-bg);border-color:var(--red-bd);border-left-color:var(--red);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.color-card:hover.amber {background:var(--amber-bg);border-color:var(--amber-bd);border-left-color:var(--amber);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.color-card:hover.purple{background:var(--purple-bg);border-color:var(--purple-bd);border-left-color:var(--purple);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.color-card:hover.teal  {background:var(--teal-bg);border-color:var(--teal-bd);border-left-color:var(--teal);box-shadow:0 4px 12px rgba(0,0,0,.05)}
+.card-num{font-family:var(--sans);font-weight:700;font-size:2.2rem;line-height:1.1;color:var(--text);transition:color .2s ease}
+.color-card:hover .card-num.blue   {color:var(--blue)}
+.color-card:hover .card-num.green  {color:var(--green)}
+.color-card:hover .card-num.red    {color:var(--red)}
+.color-card:hover .card-num.amber  {color:var(--amber)}
+.color-card:hover .card-num.purple {color:var(--purple)}
+.color-card:hover .card-num.teal   {color:var(--teal)}
 .card-sub{font-family:var(--mono);font-size:var(--text-sm);color:var(--muted);margin-top:var(--sp-1)}
 
 /* ── Badges ── */
