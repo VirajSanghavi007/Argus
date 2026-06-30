@@ -15,89 +15,65 @@ if %errorlevel%==0 (set PYTHON=python) else (
     where py >nul 2>&1
     if %errorlevel%==0 (set PYTHON=py) else (
         echo [ERROR] Python not found. Install Python 3.11+ and add to PATH.
-        goto :fail
+        pause & exit /b 1
     )
 )
-echo [OK] Found %PYTHON%
+echo [OK] Python found.
 
 :: ── Virtual Environment ──────────────────────────────────────────────────
 if not exist "venv\Scripts\activate.bat" (
     echo [SETUP] Creating virtual environment...
     %PYTHON% -m venv venv
     if not exist "venv\Scripts\activate.bat" (
-        echo [ERROR] Failed to create virtual environment.
-        goto :fail
+        echo [ERROR] Failed to create venv.
+        pause & exit /b 1
     )
-    echo [OK] Virtual environment created.
+    call venv\Scripts\activate.bat
+    echo [SETUP] Installing dependencies...
+    pip install -r config\requirements.txt -q
+    echo [OK] Dependencies installed.
 ) else (
-    echo [OK] Virtual environment found.
+    call venv\Scripts\activate.bat
+    echo [OK] Virtual environment ready.
 )
 
-call venv\Scripts\activate.bat
-
-:: ── Dependencies ─────────────────────────────────────────────────────────
-echo.
-echo [SETUP] Installing dependencies...
-pip install -r config\requirements.txt -q
-echo [OK] Dependencies installed.
-
 :: ── Pre-flight ───────────────────────────────────────────────────────────
-echo.
 if not exist "data" mkdir data
 if not exist "logs" mkdir logs
 
 if exist "data\multignn_model.pt" (
     echo [OK] Model file found.
 ) else (
-    echo [WARN] No model file. App will run in degraded mode.
+    echo [WARN] No model file - app runs in degraded mode.
 )
 
-:: ── Start Backend ────────────────────────────────────────────────────────
+:: ── Launch ───────────────────────────────────────────────────────────────
 echo.
-echo [START] Launching backend...
+echo [START] Starting Argus...
 set PYTHONPATH=src
-start "Argus Backend" /min cmd /k "cd /d "%~dp0" && venv\Scripts\activate.bat && set PYTHONPATH=src && python scripts\serve.py"
+start "Argus" cmd /k "cd /d "%~dp0" && call venv\Scripts\activate.bat && set PYTHONPATH=src && python scripts\serve.py"
 
-:: ── Wait for Health ──────────────────────────────────────────────────────
-echo [WAIT] Waiting for backend...
-
+:: ── Wait for backend then open browser ───────────────────────────────────
+echo [WAIT] Waiting for server...
 set /a COUNT=0
-
 :loop
 if %COUNT% geq 120 (
-    echo.
-    echo [ERROR] Backend did not start in 120 seconds.
-    echo         Check the minimized "Argus Backend" window for errors.
-    goto :fail
+    echo [ERROR] Server didn't start in 120s. Check the Argus window.
+    pause & exit /b 1
 )
-
 timeout /t 1 /nobreak >nul
-
 powershell -NoProfile -Command "try{Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing -TimeoutSec 2;exit 0}catch{exit 1}" >nul 2>&1
 if %errorlevel%==0 goto :ready
-
 set /a COUNT=%COUNT%+1
 goto :loop
 
 :ready
-echo.
-echo [OK] Backend is running!
-echo.
-echo [START] Opening dashboard...
-timeout /t 1 /nobreak >nul
 start "" http://localhost:8000
-
 echo.
 echo  ========================================
 echo   Dashboard: http://localhost:8000
 echo   API docs:  http://localhost:8000/docs
 echo  ========================================
 echo.
-echo  Close this window to stop.
-pause >nul
-goto :eof
-
-:fail
-echo.
-pause
-exit /b 1
+echo  [Close the Argus window to stop the server]
+exit /b 0
