@@ -66,5 +66,8 @@ data/*.csv
 # tree. Ignoring them keeps deploys from eating these files.
 /argus_*.csv
 
+# Private prep notes — keep out of the public repo (candid weaknesses / answers)
+/EVALUATOR_BRIEF.md
+
 # Local pip wheel cache � never commit (huge, platform-specific)
 wheels/

@@ -106,13 +106,14 @@ n8n / curl / your own script
    ├──────────────────────────────► validated against TransactionIn model
                                        │
                                        ├─► store_live_transactions() ──► INSERT INTO live_transactions
-                                       │                                  (audit trail — see note below)
-                                       └─► queued for the next full
-                                           pipeline re-run to actually
-                                           enter the alert set
+                                       │                                  (audit trail)
+                                       └─► _rescore_neighborhood() on a
+                                           background thread → scores the
+                                           subgraph around the new accounts →
+                                           merges any new clusters into ALERTS
 ```
 
-**Note on `live_transactions`:** this table is intentionally a pure audit log today — every ingested row is recorded, but nothing automatically re-scores or replays it into a new alert cluster mid-session (the model only re-scores on the next full pipeline run, e.g. a container restart or manual trigger). If a future iteration wants true real-time re-scoring, this table is where the read side would be built.
+**Note on `live_transactions`:** every ingested row is recorded as an audit trail **and** kicks off a background **neighborhood rescore** (`_rescore_neighborhood` in `main.py`): it builds a mini-graph from the new rows, scores/filters them, classifies any resulting cluster's topology, and merges new alerts into the in-memory `ALERTS` set within seconds — so live-ingested activity appears in the Dashboard Live Ingestion Feed and Investigate without waiting for a full pipeline re-run. The full-dataset re-score still only happens on a container restart or manual trigger; the neighborhood rescore is the fast, incremental path. Frontend views pull the new alerts via the in-app **Refresh** button (or the Live Feed's own polling).
 
 ## Deploy topology
 
@@ -124,6 +125,6 @@ n8n / curl / your own script
 ## Known gaps (honest, as of this writing)
 
 - **No staging environment.** Every deploy goes straight to the one production Space. A bad deploy is caught by a human noticing, not by a pre-prod check. Mitigated by: `rollback-hf.ps1` makes reverting fast once noticed.
-- **`live_transactions` is write-only.** See the note above — it's a deliberate audit log, not (yet) wired into re-scoring.
+- **Live rescore is incremental, not full.** `/ingest` triggers a *neighborhood* rescore (the subgraph around new accounts), which is fast but doesn't re-evaluate the entire existing graph against the new data. A full re-score still requires a pipeline re-run. True continuous streaming is the productionization step.
 - **No mobile-specific layout.** The frontend is desktop-oriented; mobile is explicitly out of scope for this project.
 - **Single shared admin credentials**, not per-analyst accounts with fine-grained roles — acceptable for a hackathon demo, not for a real deployment.
