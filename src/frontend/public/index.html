@@ -360,8 +360,8 @@
           aria-label="Account ID to search" onkeydown="if(event.key==='Enter')searchAccountNetwork()" />
         <button class="btn btn-blue" onclick="searchAccountNetwork()">Search</button>
       </div>
-      <div id="acct-search-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:var(--sp-2)"></div>
-      <div class="graph-area" style="height:560px;flex-shrink:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
+      <div id="acct-search-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:var(--sp-2);width:100%;max-width:1100px"></div>
+      <div class="graph-area" style="width:100%;max-width:1100px;height:560px;flex-shrink:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
         <div id="acct-search-cy" style="width:100%;height:100%;background:var(--row-alt)"></div>
       </div>
       <div style="margin-top:var(--sp-2);font-family:var(--mono);font-size:10px;color:var(--muted);display:flex;gap:16px">
@@ -617,7 +617,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=22"></script>
+  <script src="/static/js/app.js?v=23"></script>
 </body>
 
 </html>
