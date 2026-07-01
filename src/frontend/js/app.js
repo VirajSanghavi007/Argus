@@ -1493,70 +1493,72 @@ async function searchAccountNetwork() {
     ...d.edges.map((e, i) => ({ data: { id: `se${i}`, source: e.source, target: e.target, label: e.amount || '' } })),
   ];
 
-  searchCy = cytoscape({
-    container: cyEl,
-    elements,
-    style: [
-      { selector: 'node', style: {
-          'background-color': '#64748B', 'width': 30, 'height': 30,
-          'label': 'data(label)', 'color': '#E2E8F0', 'font-size': 10, 'font-family': 'DM Mono',
-          'text-valign': 'bottom', 'text-margin-y': 6,
-          'border-width': 2, 'border-color': '#1E293B',
-        } },
-      { selector: 'node[hop = 0]', style: { 'background-color': '#F59E0B', 'width': 44, 'height': 44 } },
-      { selector: 'node[hop = 1]', style: { 'background-color': '#3B82F6' } },
-      { selector: 'node[hop = 2]', style: { 'background-color': '#64748B' } },
-      { selector: 'node[alertCount > 1]', style: { 'border-width': 4, 'border-color': '#DA251C' } },
-      { selector: 'edge', style: {
-          'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
-          'line-color': '#475569', 'target-arrow-color': '#475569',
-          'label': 'data(label)', 'font-size': 8, 'color': '#94A3B8', 'font-family': 'DM Mono',
-          'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
-        } },
-    ],
-    layout: { name: 'preset', positions: {} }, // real layout run below, rooted by element (not a CSS id selector)
-    userZoomingEnabled: true, userPanningEnabled: true,
-  });
+  try {
+    searchCy = cytoscape({
+      container: cyEl,
+      elements,
+      style: [
+        { selector: 'node', style: {
+            'background-color': '#64748B', 'width': 30, 'height': 30,
+            'label': 'data(label)', 'color': '#E2E8F0', 'font-size': 10, 'font-family': 'DM Mono',
+            'text-valign': 'bottom', 'text-margin-y': 6,
+            'border-width': 2, 'border-color': '#1E293B',
+          } },
+        { selector: 'node[hop = 0]', style: { 'background-color': '#F59E0B', 'width': 44, 'height': 44 } },
+        { selector: 'node[hop = 1]', style: { 'background-color': '#3B82F6' } },
+        { selector: 'node[hop = 2]', style: { 'background-color': '#64748B' } },
+        { selector: 'node[alertCount > 1]', style: { 'border-width': 4, 'border-color': '#DA251C' } },
+        { selector: 'edge', style: {
+            'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
+            'line-color': '#475569', 'target-arrow-color': '#475569',
+            'label': 'data(label)', 'font-size': 8, 'color': '#94A3B8', 'font-family': 'DM Mono',
+            'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
+          } },
+      ],
+      layout: { name: 'grid' },
+      userZoomingEnabled: true, userPanningEnabled: true,
+    });
 
-  // Account IDs (e.g. "80D1BD2F0") can start with a digit, which needs CSS
-  // escaping in an id-selector — Cytoscape's own selector engine doesn't
-  // reliably parse that escape syntax, so `#${CSS.escape(id)}` can silently
-  // match nothing and collapse breadthfirst's layout onto one line. Look the
-  // root up by data id via getElementById() instead, which sidesteps CSS
-  // selector parsing entirely.
-  const rootEle = searchCy.getElementById(centerId);
-  searchCy.layout({
-    name: 'breadthfirst',
-    roots: rootEle.length ? rootEle : undefined,
-    directed: false, spacingFactor: 1.4, padding: 40, animate: false,
-  }).run();
-  searchCy.fit(undefined, 40);
+    const rootEle = searchCy.nodes().filter(n => n.data('hop') === 0);
+    if (rootEle.length) {
+      searchCy.layout({
+        name: 'breadthfirst',
+        roots: rootEle,
+        directed: false, spacingFactor: 1.4, padding: 40, animate: false,
+      }).run();
+    }
 
-  searchCy.on('tap', 'node', e => {
-    const nid = e.target.id();
-    copyAccountId(nid);
-    document.getElementById('acct-search-inp').value = nid;
-    searchAccountNetwork();
-  });
-  searchCy.on('mouseover', 'node', e => {
-    const n = e.target.data();
-    const pos = e.renderedPosition;
-    const box = cyEl.getBoundingClientRect();
-    const tt = document.getElementById('tooltip');
-    tt.style.left = (box.left + pos.x + 16) + 'px';
-    tt.style.top = (box.top + pos.y - 20) + 'px';
-    tt.style.display = 'block';
-    document.getElementById('tt-id').textContent = n.id;
-    document.getElementById('tt-bank').textContent = n.hop === 0 ? 'Searched account' : `${n.hop} hop${n.hop>1?'s':''} away`;
-    document.getElementById('tt-role').textContent = n.alertCount > 1 ? `In ${n.alertCount} alerts` : (n.alertCount === 1 ? 'In 1 alert' : '—');
-    document.getElementById('tt-risk').textContent = `${Math.round((n.risk||0)*100)}%`;
-    document.getElementById('tt-vol').textContent = '—';
-    document.getElementById('tt-txn').textContent = '—';
-  });
-  searchCy.on('mouseout', 'node', () => document.getElementById('tooltip').style.display = 'none');
+    searchCy.fit(undefined, 40);
 
-  searchCy.one('layoutstop', () => { searchCy.resize(); searchCy.fit(undefined, 40); });
-  setTimeout(() => { if (searchCy) { searchCy.resize(); searchCy.fit(undefined, 40); } }, 100);
+    searchCy.on('tap', 'node', e => {
+      const nid = e.target.id();
+      copyAccountId(nid);
+      document.getElementById('acct-search-inp').value = nid;
+      searchAccountNetwork();
+    });
+    searchCy.on('mouseover', 'node', e => {
+      const n = e.target.data();
+      const pos = e.renderedPosition;
+      const box = cyEl.getBoundingClientRect();
+      const tt = document.getElementById('tooltip');
+      tt.style.left = (box.left + pos.x + 16) + 'px';
+      tt.style.top = (box.top + pos.y - 20) + 'px';
+      tt.style.display = 'block';
+      document.getElementById('tt-id').textContent = n.id;
+      document.getElementById('tt-bank').textContent = n.hop === 0 ? 'Searched account' : `${n.hop} hop${n.hop>1?'s':''} away`;
+      document.getElementById('tt-role').textContent = n.alertCount > 1 ? `In ${n.alertCount} alerts` : (n.alertCount === 1 ? 'In 1 alert' : '—');
+      document.getElementById('tt-risk').textContent = `${Math.round((n.risk||0)*100)}%`;
+      document.getElementById('tt-vol').textContent = '—';
+      document.getElementById('tt-txn').textContent = '—';
+    });
+    searchCy.on('mouseout', 'node', () => document.getElementById('tooltip').style.display = 'none');
+
+    searchCy.one('layoutstop', () => { searchCy.resize(); searchCy.fit(undefined, 40); });
+    setTimeout(() => { if (searchCy) { searchCy.resize(); searchCy.fit(undefined, 40); } }, 100);
+  } catch (e) {
+    meta.textContent = 'Error rendering graph: ' + (e.message || 'Unknown error');
+    console.error('searchAccountNetwork error:', e);
+  }
 }
 
 /* ════════════════════════════════════════════
