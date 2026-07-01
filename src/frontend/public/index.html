@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=16" />
+  <link rel="stylesheet" href="/static/css/style.css?v=17" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -282,15 +282,15 @@
             </select>
           </div>
         </div>
-        <div style="margin-top:var(--sp-3)">
-          <label class="label-up" style="margin-bottom:var(--sp-1);display:block" title="Filter by when the alert's transactions happened">Date range</label>
-          <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
-            <input type="date" id="inv-date-start" onchange="renderSidebar()" aria-label="Activity from date" style="width:100%" />
-            <span style="color:var(--muted);font-size:11px;text-align:center">to</span>
-            <input type="date" id="inv-date-end" onchange="renderSidebar()" aria-label="Activity to date" style="width:100%" />
-            <button class="graph-btn" onclick="document.getElementById('inv-date-start').value='';document.getElementById('inv-date-end').value='';renderSidebar()"
-              aria-label="Clear date range" title="Clear date range" style="width:100%">Clear</button>
+        <div class="date-range">
+          <label class="label-up" title="Filter by when the alert's transactions happened">Date Range</label>
+          <div class="date-range-fields">
+            <input type="date" id="inv-date-start" onchange="renderSidebar()" aria-label="Activity from date" />
+            <span class="date-range-sep">to</span>
+            <input type="date" id="inv-date-end" onchange="renderSidebar()" aria-label="Activity to date" />
           </div>
+          <button class="date-range-clear" onclick="document.getElementById('inv-date-start').value='';document.getElementById('inv-date-end').value='';renderSidebar()"
+            aria-label="Clear date range" title="Clear date range">✕ Clear dates</button>
         </div>
         <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
       </div>

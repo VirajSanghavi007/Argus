@@ -89,6 +89,8 @@ body.dark .wl-rule-item  { background: var(--bg) !important; }
 
 body.dark input[type=text],
 body.dark input[type=search],
+body.dark input[type=date],
+body.dark input[type=datetime-local],
 body.dark select,
 body.dark textarea
 { background: var(--bg) !important; color: var(--text) !important; }
@@ -213,12 +215,19 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .btn-ghost:hover{color:var(--text);border-color:var(--blue)}
 
 /* ── Inputs ── */
-input[type=text],input[type=search],select,textarea{
+input[type=text],input[type=search],input[type=date],input[type=datetime-local],select,textarea{
   font-family:var(--mono);font-size:var(--text-sm);background:var(--surface);
   border:1px solid var(--border);border-radius:var(--r);
   color:var(--text);padding:var(--sp-2) var(--sp-3);outline:none;transition:border .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 input::placeholder,textarea::placeholder{color:var(--light)}
+/* Tint the native calendar icon so it's visible on both themes */
+input[type=date]::-webkit-calendar-picker-indicator,
+input[type=datetime-local]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.55;transition:opacity .15s}
+input[type=date]:hover::-webkit-calendar-picker-indicator,
+input[type=datetime-local]:hover::-webkit-calendar-picker-indicator{opacity:.9}
+body.dark input[type=date]::-webkit-calendar-picker-indicator,
+body.dark input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(1)}
 
 /* ── Filter pills ── */
 .filter-pill{font-family:var(--mono);font-size:var(--text-sm);letter-spacing:.04em;
@@ -284,6 +293,17 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 .predict-row-flagged td{background:var(--red-bg) !important;
   box-shadow:inset 3px 0 0 0 var(--red)}
 .predict-row-flagged:hover td{background:var(--red-bg) !important}
+/* Investigate sidebar — date range filter */
+.date-range{margin-top:var(--sp-3);background:var(--bg);border:1px solid var(--border-lt);
+  border-radius:8px;padding:var(--sp-3)}
+.date-range .label-up{margin-bottom:var(--sp-2)}
+.date-range-fields{display:flex;align-items:center;gap:var(--sp-2)}
+.date-range-fields input[type=date]{flex:1;min-width:0}
+.date-range-sep{color:var(--light);font-size:10px;text-transform:uppercase;letter-spacing:.06em;flex-shrink:0}
+.date-range-clear{width:100%;margin-top:var(--sp-2);background:var(--surface);border:1px solid var(--border);
+  color:var(--muted);border-radius:6px;padding:6px 10px;font-family:var(--sans);font-size:11px;font-weight:600;
+  letter-spacing:.04em;cursor:pointer;transition:all .15s}
+.date-range-clear:hover{border-color:var(--red);color:var(--red)}
 .timeline-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)}
 .timeline-card h3{font-family:var(--sans);font-size:var(--text-xs);text-transform:uppercase;
   letter-spacing:.08em;color:var(--muted);margin-bottom:var(--sp-4)}
