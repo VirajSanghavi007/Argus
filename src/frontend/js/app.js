@@ -1515,8 +1515,9 @@ async function searchAccountNetwork() {
             'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
           } },
       ],
-      layout: { name: 'grid' },
+      layout: { name: 'cose', animate: false, nodeSpacing: 10 },
       userZoomingEnabled: true, userPanningEnabled: true,
+      wheelSensitivity: 0.1,
     });
 
     const rootEle = searchCy.nodes().filter(n => n.data('hop') === 0);
@@ -1526,9 +1527,15 @@ async function searchAccountNetwork() {
         roots: rootEle,
         directed: false, spacingFactor: 1.4, padding: 40, animate: false,
       }).run();
+    } else {
+      searchCy.layout({ name: 'cose', animate: false }).run();
     }
 
-    searchCy.fit(undefined, 40);
+    setTimeout(() => {
+      if (searchCy && searchCy.elements().length) {
+        searchCy.fit(undefined, 40);
+      }
+    }, 300);
 
     searchCy.on('tap', 'node', e => {
       const nid = e.target.id();
