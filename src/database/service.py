@@ -59,17 +59,48 @@ class _PGConn:
         _get_pg_pool().putconn(self._conn)
 
 
-# ── Schema init ──────────────────────────────────────────────────────────────
+# ── Schema init / migrations ──────────────────────────────────────────────────
+#
+# Schema changes are numbered SQL files in src/database/migrations/, applied
+# once each and recorded in schema_migrations. See migrations/README.md.
 
-def init_db() -> None:
-    """Initialize database and schema. Idempotent."""
-    schema_path = Path(config.SCHEMA_PATH)
-    if not schema_path.exists():
-        raise FileNotFoundError(f"Postgres schema missing: {schema_path}")
-    sql = schema_path.read_text()
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+
+def run_migrations() -> None:
+    """Apply any migration file not yet recorded in schema_migrations, in order."""
     with _PGConn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version     TEXT PRIMARY KEY,
+                    applied_at  TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cur.execute("SELECT version FROM schema_migrations")
+            applied = {r[0] for r in cur.fetchall()}
+
+    files = sorted(MIGRATIONS_DIR.glob("*.sql")) if MIGRATIONS_DIR.exists() else []
+    pending = [f for f in files if f.name not in applied]
+    if not pending:
+        logger.info(f"PostgreSQL schema up to date ({len(applied)} migration(s) applied)")
+        return
+
+    for f in pending:
+        sql = f.read_text()
+        with _PGConn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                cur.execute(
+                    "INSERT INTO schema_migrations (version) VALUES (%s) ON CONFLICT DO NOTHING",
+                    (f.name,),
+                )
+        logger.info(f"Applied migration: {f.name}")
+
+
+def init_db() -> None:
+    """Initialize database and bring the schema up to date. Idempotent."""
+    run_migrations()
     logger.info(f"PostgreSQL ready -> {DATABASE_URL.split('@')[-1]}")
 
 

@@ -276,12 +276,12 @@
         </div>
         <div style="margin-top:var(--sp-3)">
           <label class="label-up" style="margin-bottom:var(--sp-1);display:block" title="Filter by when the alert's transactions happened">Date range</label>
-          <div style="display:flex;gap:var(--sp-2);align-items:center">
-            <input type="date" id="inv-date-start" onchange="renderSidebar()" aria-label="Activity from date" style="flex:1;min-width:0" />
-            <span style="color:var(--muted);font-size:11px">to</span>
-            <input type="date" id="inv-date-end" onchange="renderSidebar()" aria-label="Activity to date" style="flex:1;min-width:0" />
+          <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
+            <input type="date" id="inv-date-start" onchange="renderSidebar()" aria-label="Activity from date" style="width:100%" />
+            <span style="color:var(--muted);font-size:11px;text-align:center">to</span>
+            <input type="date" id="inv-date-end" onchange="renderSidebar()" aria-label="Activity to date" style="width:100%" />
             <button class="graph-btn" onclick="document.getElementById('inv-date-start').value='';document.getElementById('inv-date-end').value='';renderSidebar()"
-              aria-label="Clear date range" title="Clear date range">Clear</button>
+              aria-label="Clear date range" title="Clear date range" style="width:100%">Clear</button>
           </div>
         </div>
         <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
@@ -364,7 +364,7 @@
         <button class="btn btn-blue" onclick="searchAccountNetwork()">Search</button>
       </div>
       <div id="acct-search-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:var(--sp-2)"></div>
-      <div class="graph-area" style="height:560px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
+      <div class="graph-area" style="height:560px;flex-shrink:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
         <div id="acct-search-cy" style="width:100%;height:100%;background:var(--row-alt)"></div>
       </div>
       <div style="margin-top:var(--sp-2);font-family:var(--mono);font-size:10px;color:var(--muted);display:flex;gap:16px">
@@ -621,7 +621,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=19"></script>
+  <script src="/static/js/app.js?v=20"></script>
 </body>
 
 </html>

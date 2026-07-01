@@ -46,11 +46,16 @@ git commit -m "HF Spaces deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-Nu
 git push hf hf-deploy:main --force
 $ok = ($LASTEXITCODE -eq 0)
 
-# Return to where you started (-f handles the untracked PPT)
-git checkout -f $src | Out-Null
-
+# Tag this deploy on the SOURCE branch (not hf-deploy, which gets deleted
+# next run) so rollback-hf.ps1 always has a real, permanent ref to go back
+# to. Tags accumulate — see rollback-hf.ps1 to list and use them.
 if ($ok) {
+  git checkout -f $src | Out-Null
+  $tag = "hf-deploy-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+  git tag $tag | Out-Null
   Write-Host "`nDeployed. Space is rebuilding -> https://huggingface.co/spaces/VirajSanghavi/Argus" -ForegroundColor Green
+  Write-Host "Tagged as '$tag' for rollback (see .\rollback-hf.ps1)" -ForegroundColor DarkGray
 } else {
+  git checkout -f $src | Out-Null
   Write-Host "`nPush failed. Check the 'hf' remote token (needs WRITE)." -ForegroundColor Red
 }

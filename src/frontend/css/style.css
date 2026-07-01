@@ -748,3 +748,15 @@ input,textarea,select{
   padding:6px 12px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);}
 #tour-tip button.tour-primary{background:var(--blue);border-color:var(--blue);color:#fff;}
 #tour-tip button.tour-skip{background:none;border:none;color:var(--muted);padding:6px 4px;}
+
+/* ── Loading skeletons (Case Manager / Whitelist while data fetches) ── */
+.skeleton-bar{
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 4px;
+}
+@keyframes skeleton-shimmer{
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

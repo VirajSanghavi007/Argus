@@ -1,10 +1,6 @@
--- Argus AML Detection — PostgreSQL Schema (human-readable snapshot)
---
--- This file is NOT executed by the app. It exists purely so a reader can see
--- the full current schema in one place. The database is actually built from
--- the numbered files in src/database/migrations/ (see that folder's README).
--- If you change the schema, add a new migration file — do not edit this one
--- in isolation, though keeping it in sync as documentation is good practice.
+-- Baseline schema — everything Argus needed as of the Postgres migration.
+-- This is migration 0001; it is applied exactly once and never edited after
+-- the fact (see src/database/migrations/README.md for the ground rules).
 
 CREATE TABLE IF NOT EXISTS alerts (
     id           TEXT PRIMARY KEY,

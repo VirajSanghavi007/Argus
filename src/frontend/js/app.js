@@ -260,14 +260,35 @@ const API_BASE = (window.location.protocol === 'file:')
   : '';
 const API_CREDENTIALS = API_BASE ? 'include' : 'same-origin';
 
-function apiFetch(path, options = {}) {
+let _sessionExpiredHandled = false;
+
+// Bounce back to the login screen when the session dies mid-use (expired
+// token, server restart that dropped in-memory sessions, etc). Without this,
+// every subsequent API call just silently 401s and the UI looks "stuck".
+function handleSessionExpired() {
+  if (_sessionExpiredHandled) return;
+  _sessionExpiredHandled = true;
+  localStorage.removeItem('argus-session-token');
+  sessionToken = '';
+  authUser = null;
+  try { toast('Session expired — please log in again', 'error'); } catch (e) {}
+  setTimeout(() => window.location.reload(), 800);
+}
+
+async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (sessionToken) headers['X-Session-Token'] = sessionToken;
-  return fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
     credentials: API_CREDENTIALS,
   });
+  // /auth/login itself returning 401 means "bad credentials", not "session
+  // expired" — don't trigger the bounce loop for that one.
+  if (res.status === 401 && !path.startsWith('/auth/login')) {
+    handleSessionExpired();
+  }
+  return res;
 }
 
 function clearAppShellGuard() {
@@ -305,6 +326,27 @@ function formatPatternName(pt) {
 }
 // Emojis removed — patterns render as text only.
 const PATTERN_ICONS = {};
+
+// Fan-In, Fan-Out, and Cycle are common low-level topologies that rarely
+// indicate laundering on their own — they're the building blocks composite
+// patterns are made of. Surface that relationship wherever a composite
+// pattern is named, instead of listing them as unrelated, standalone patterns.
+const PATTERN_BUILDING_BLOCKS = {
+  scatterGather: ['fanOut', 'fanIn'],
+  gatherScatter: ['fanIn', 'fanOut', 'cycle'],
+  bipartite:     ['fanOut', 'fanIn'],
+};
+function buildingBlocksNote(pt) {
+  const blocks = PATTERN_BUILDING_BLOCKS[pt];
+  if (!blocks || !blocks.length) return '';
+  return `Built from ${blocks.map(formatPatternName).join(' + ')} at the intermediary hops — not a pattern in its own right, but a combination of them.`;
+}
+// "SCATTER_GATHER" -> "scatterGather", to bridge the backend's UPPER_SNAKE
+// pattern keys (whitelist rules) with the frontend's camelCase ones.
+function snakeToCamelPattern(s) {
+  const parts = (s||'').toLowerCase().split('_');
+  return parts[0] + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+}
 
 const SIGNAL_ICONS = {
   'Rapid Fan-Out':'⚡', 'Round-Trip':'🔁', 'Structuring':'💰',
@@ -633,7 +675,25 @@ function showView(name) {
     if (!currentAlert) renderInvestigateEmpty();
   }
   if (name === 'cases')       renderCaseManager();
-  if (name === 'whitelist')   loadWhitelist();
+  if (name === 'whitelist') {
+    showSkeleton('wl-accounts-list', 3);
+    showSkeleton('wl-banks-list', 2);
+    showSkeleton('wl-rules-list', 3);
+    showSkeleton('suppressed-tbody', 3, 'row');
+    loadWhitelist();
+  }
+}
+
+// Simple shimmering placeholder rows/blocks shown while a view's data loads,
+// so slower views (Case Manager re-filter, Whitelist's two network calls)
+// don't sit on a blank panel.
+function showSkeleton(elId, count = 3, kind = 'block') {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const item = kind === 'row'
+    ? '<tr><td colspan="8"><div class="skeleton-bar" style="width:100%;height:14px"></div></td></tr>'
+    : '<div class="skeleton-bar" style="width:100%;height:36px;margin-bottom:8px;border-radius:6px"></div>';
+  el.innerHTML = item.repeat(count);
 }
 
 /* ════════════════════════════════════════════
@@ -955,8 +1015,9 @@ async function loadAlertById(id) {
   // Route bar
   const route = currentAlert.routeNodes||[];
   document.getElementById('route-bar').innerHTML = route.map((n,i) =>
-    `<span class="route-pill" onclick="highlightNode('${n}')" role="button" tabindex="0"
-           onkeydown="if(event.key==='Enter')highlightNode('${n}')">${n}</span>${i<route.length-1?'<span class="route-arrow">→</span>':''}`
+    `<span class="route-pill" onclick="highlightNode('${n}');copyAccountId('${n}')" role="button" tabindex="0"
+           title="Click to highlight and copy account ID"
+           onkeydown="if(event.key==='Enter'){highlightNode('${n}');copyAccountId('${n}')}">${n}</span>${i<route.length-1?'<span class="route-arrow">→</span>':''}`
   ).join('');
 
   // Stats strip
@@ -1401,7 +1462,6 @@ function closeNodeGraphHistory() {
    ACCOUNT SEARCH — 2-hop network
 ════════════════════════════════════════════ */
 let searchCy = null;
-const HOP_COLOR = { 0: '#F59E0B', 1: '#3B82F6', 2: '#64748B' };
 
 async function searchAccountNetwork() {
   const id = (document.getElementById('acct-search-inp')?.value || '').trim();
@@ -1427,6 +1487,7 @@ async function searchAccountNetwork() {
   const hop2 = d.nodes.filter(n => n.hop === 2).length;
   meta.textContent = `${d.nodes.length} accounts in network (${hop1} direct, ${hop2} second-hop) · ${d.edges.length} transactions`;
 
+  const centerId = d.account_id;
   const elements = [
     ...d.nodes.map(n => ({ data: { id: n.id, label: n.id, hop: n.hop, risk: n.risk_score, alertCount: n.alert_count } })),
     ...d.edges.map((e, i) => ({ data: { id: `se${i}`, source: e.source, target: e.target, label: e.amount || '' } })),
@@ -1437,13 +1498,15 @@ async function searchAccountNetwork() {
     elements,
     style: [
       { selector: 'node', style: {
-          'background-color': ele => HOP_COLOR[ele.data('hop')] || '#64748B',
+          'background-color': '#64748B', 'width': 30, 'height': 30,
           'label': 'data(label)', 'color': '#E2E8F0', 'font-size': 10, 'font-family': 'DM Mono',
           'text-valign': 'bottom', 'text-margin-y': 6,
-          'width': ele => ele.data('hop') === 0 ? 44 : 30, 'height': ele => ele.data('hop') === 0 ? 44 : 30,
-          'border-width': ele => ele.data('alertCount') > 1 ? 4 : 2,
-          'border-color': ele => ele.data('alertCount') > 1 ? '#DA251C' : '#1E293B',
+          'border-width': 2, 'border-color': '#1E293B',
         } },
+      { selector: 'node[hop = 0]', style: { 'background-color': '#F59E0B', 'width': 44, 'height': 44 } },
+      { selector: 'node[hop = 1]', style: { 'background-color': '#3B82F6' } },
+      { selector: 'node[hop = 2]', style: { 'background-color': '#64748B' } },
+      { selector: 'node[alertCount > 1]', style: { 'border-width': 4, 'border-color': '#DA251C' } },
       { selector: 'edge', style: {
           'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
           'line-color': '#475569', 'target-arrow-color': '#475569',
@@ -1451,12 +1514,13 @@ async function searchAccountNetwork() {
           'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
         } },
     ],
-    layout: { name: 'concentric', concentric: n => 3 - n.data('hop'), levelWidth: () => 1, padding: 40, animate: false },
+    layout: { name: 'breadthfirst', roots: `#${CSS.escape(centerId)}`, directed: false, spacingFactor: 1.4, padding: 40, animate: false },
     userZoomingEnabled: true, userPanningEnabled: true,
   });
 
   searchCy.on('tap', 'node', e => {
     const nid = e.target.id();
+    copyAccountId(nid);
     document.getElementById('acct-search-inp').value = nid;
     searchAccountNetwork();
   });
@@ -1585,9 +1649,9 @@ function generateHumanExplanation(a) {
     fanOut:       `A <strong>single source account</strong> dispersed ${amt} across multiple recipients — a classic structuring tactic to avoid detection thresholds. The model traced <strong>${n} outbound transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
     fanIn:        `Multiple accounts <strong>funnelled funds into one collector</strong>, aggregating ${amt}. This consolidation pattern is associated with layering before placement. <strong>${n} inbound transfers</strong> across <strong>${nodes} accounts</strong> were flagged.${riskNote}`,
     cycle:        `Money <strong>returned to its origin</strong> through a circular chain — a classic layering technique that obscures the audit trail. The GNN traced a <strong>${n}-hop loop</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
-    scatterGather:`Funds were <strong>fanned out through intermediaries then reconverged</strong> — a scatter-gather pattern that disguises the original source. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong> were detected.${riskNote}`,
-    gatherScatter:`A <strong>central hub collected from multiple sources</strong> then redistributed to multiple destinations, consistent with a clearing-house fraud pattern. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
-    bipartite:    `Two distinct groups of accounts show <strong>cross-group transfers only</strong>, indicating coordinated movement between controlled entities. <strong>${n} edges</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    scatterGather:`Funds were <strong>fanned out through intermediaries then reconverged</strong> — a scatter-gather structure built from fan-out and fan-in relationships at the intermediary hops, not a standalone pattern of its own. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong> were detected.${riskNote}`,
+    gatherScatter:`A <strong>central hub collected from multiple sources</strong> then redistributed to multiple destinations — a gather-scatter structure combining fan-in, fan-out, and sometimes a return cycle. <strong>${n} transfers</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
+    bipartite:    `Two distinct groups of accounts show <strong>cross-group transfers only</strong> — built from fan-out and fan-in relationships between the two groups, indicating coordinated movement between controlled entities. <strong>${n} edges</strong> across <strong>${nodes} accounts</strong>.${riskNote}`,
     random:       `A <strong>complex network with no single dominant pattern</strong> was flagged. The GNN detected elevated suspicion across <strong>${n} transactions</strong> involving <strong>${nodes} accounts</strong>.${riskNote}`,
   };
   return EXPLANATIONS[pt] || `The GNN model flagged <strong>${n} transactions</strong> across <strong>${nodes} accounts</strong>, moving ${amt}. Edge importance scores indicate suspicious flow.${riskNote}`;
@@ -1776,11 +1840,15 @@ function renderWhitelistPanel(wl) {
     .map(b=>`<span class="badge badge-teal">${b}</span>`).join('');
 
   const rules = wl.exemption_rules||{};
-  document.getElementById('wl-rules-list').innerHTML = Object.entries(rules).map(([pat,rule])=>`
+  document.getElementById('wl-rules-list').innerHTML = Object.entries(rules).map(([pat,rule])=>{
+    const note = buildingBlocksNote(snakeToCamelPattern(pat));
+    return `
     <div class="wl-rule-item">
       <div class="wl-rule-pattern">${pat}</div>
       <div class="wl-rule-reason">${rule.reason}</div>
-    </div>`).join('');
+      ${note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px">${note}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function renderSuppressed(suppressed) {
@@ -1903,7 +1971,9 @@ async function runPrediction() {
   try {
     const res = await fetch(`${API_BASE}/predict`, {
       method: 'POST', body: formData, credentials: API_CREDENTIALS, signal: predictAbort.signal,
+      headers: sessionToken ? { 'X-Session-Token': sessionToken } : {},
     });
+    if (res.status === 401) { handleSessionExpired(); throw new Error('Session expired'); }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || 'Prediction failed');
@@ -1953,6 +2023,13 @@ async function runPrediction() {
 /* ════════════════════════════════════════════
    TOAST
 ════════════════════════════════════════════ */
+function copyAccountId(id) {
+  navigator.clipboard?.writeText(id).then(
+    () => toast(`Copied ${id}`, 'success'),
+    () => toast('Could not copy to clipboard', 'error')
+  );
+}
+
 function toast(msg, type='info') {
   const container=document.getElementById('toasts');
   const el=document.createElement('div');

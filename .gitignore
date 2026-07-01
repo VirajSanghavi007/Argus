@@ -37,6 +37,7 @@ Thumbs.db
 .env
 .env.*
 *.env
+!.env.example
 kaggle.json
 
 # Build / dist
@@ -59,5 +60,5 @@ node_modules/
 # fraud_model.pkl is ~648KB
 data/*.csv
 
-# Local pip wheel cache — never commit (huge, platform-specific)
+# Local pip wheel cache ï¿½ never commit (huge, platform-specific)
 wheels/

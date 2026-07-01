@@ -2,6 +2,8 @@
 
 Real-time anti-money laundering detection using a Multi-GNN (Graph Neural Network) that classifies transactions as laundering/legitimate directly on the transaction multigraph. Built for the iDEA 2.0 hackathon, judged by Union Bank of India.
 
+**Docs:** [ARCHITECTURE.md](ARCHITECTURE.md) (system design, diagrams, known gaps) · [API.md](API.md) (endpoint reference) · [src/database/migrations/README.md](src/database/migrations/README.md) (schema change process)
+
 ## Folder Structure
 
 ```
@@ -43,7 +45,9 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
 # 3. Point at a Postgres database (required — there is no SQLite fallback)
+# Copy .env.example to .env (or export the vars directly) and fill in DATABASE_URL.
 export DATABASE_URL=postgresql://user:pass@host:5432/dbname
+# Schema/migrations run automatically on startup — no separate migrate command.
 
 # 4. Place dataset
 # HI-Medium_Trans.csv under data/archive/datasets/IBM/ (gitignored, not in repo)
@@ -57,11 +61,25 @@ PYTHONPATH=src python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 # Open http://localhost:8000
 ```
 
+## Testing
+
+```bash
+PYTHONPATH=src python -m pytest src/backend/tests/ -v
+```
+
+Two kinds of tests live side by side:
+- **Pure-logic tests** (`test_serializer.py`, `test_whitelist.py`) — no DB connection needed, always run.
+- **Postgres-backed tests** (`test_service_postgres.py`) — cover `replace_alerts`, `record_decision`, session create/validate/expire, whitelist add/remove, live-ingest storage. These **skip automatically** unless `DATABASE_URL` points at a reachable database. They only ever touch uniquely-prefixed `TEST-PYTEST-*` rows and clean up after themselves in a `finally` block, so it's safe to point them at the same database backing the live deployment. The one genuinely destructive test (`replace_alerts`, which wipes and rebuilds the whole `alerts` table) additionally requires `ALLOW_DESTRUCTIVE_DB_TESTS=1` — do not set that against production.
+
 ## Deploying
 
 Live deployment is Hugging Face Spaces (Docker SDK) — see `deploy-hf.ps1` for the one-command redeploy. The Dockerfile installs `requirements.txt` for the core API, then installs CPU `torch` + `torch_geometric` separately for the ML path. `DATABASE_URL` must be set as an HF Space **secret** (never committed to a file).
 
 The model file (`data/multignn_model.pt`) and `data/pipeline_cache.json` are gitignored but force-added by `deploy-hf.ps1` so the deployed app serves alerts immediately without re-running the pipeline cold.
+
+**Rollback:** every successful deploy is tagged locally as `hf-deploy-YYYYMMDD-HHMMSS`. Run `.\rollback-hf.ps1` with no arguments to list available tags, or `.\rollback-hf.ps1 <tag>` to redeploy that exact state through the same clean-branch process `deploy-hf.ps1` uses (so it stays LFS/binary-file compliant).
+
+There is currently no separate staging environment — every push goes straight to the one production Space. A bad deploy is caught by noticing the Space logs/behavior, then rolling back with the command above.
 
 ## Environment Variables
 
