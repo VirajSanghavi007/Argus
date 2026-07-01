@@ -25,8 +25,12 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Pipeline
-# HI-Medium's first ~100k rows are mostly low-connectivity Reinvestment
-# self-loops near the start of the file and yield zero alert clusters after
-# clustering/filtering. 800k rows reaches denser, more connected activity and
-# produces a healthy ~40 alerts — verified empirically against the trained model.
+# HI-Medium's first rows are overwhelmingly low-connectivity Reinvestment
+# self-loops with very few "Is Laundering" positives (42 in the first 800k
+# rows — 0.005%). A scan of 150k-row windows across the file found rows
+# 4,350,000+ to be ~17x denser (707 positives in 800k rows, 0.088%), giving
+# the model meaningfully more signal to learn from. Both training
+# (scripts/train.py) and the serving pipeline read from this same offset so
+# the deployed model and the live-scored graph are drawn from the same slice.
+MULTIGNN_ROW_OFFSET = int(os.getenv("MULTIGNN_ROW_OFFSET", "4350000"))
 MULTIGNN_MAX_ROWS = int(os.getenv("MULTIGNN_MAX_ROWS", "800000"))

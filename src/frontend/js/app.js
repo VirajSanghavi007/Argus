@@ -1514,9 +1514,23 @@ async function searchAccountNetwork() {
           'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
         } },
     ],
-    layout: { name: 'breadthfirst', roots: `#${CSS.escape(centerId)}`, directed: false, spacingFactor: 1.4, padding: 40, animate: false },
+    layout: { name: 'preset', positions: {} }, // real layout run below, rooted by element (not a CSS id selector)
     userZoomingEnabled: true, userPanningEnabled: true,
   });
+
+  // Account IDs (e.g. "80D1BD2F0") can start with a digit, which needs CSS
+  // escaping in an id-selector — Cytoscape's own selector engine doesn't
+  // reliably parse that escape syntax, so `#${CSS.escape(id)}` can silently
+  // match nothing and collapse breadthfirst's layout onto one line. Look the
+  // root up by data id via getElementById() instead, which sidesteps CSS
+  // selector parsing entirely.
+  const rootEle = searchCy.getElementById(centerId);
+  searchCy.layout({
+    name: 'breadthfirst',
+    roots: rootEle.length ? rootEle : undefined,
+    directed: false, spacingFactor: 1.4, padding: 40, animate: false,
+  }).run();
+  searchCy.fit(undefined, 40);
 
   searchCy.on('tap', 'node', e => {
     const nid = e.target.id();

@@ -94,7 +94,8 @@ def _resolve_csv() -> Path:
 # ── Graph construction ─────────────────────────────────────────────────────────
 
 def build_graph(csv_path: Path | None = None, max_rows: int | None = None,
-                return_df: bool = False, df: "pd.DataFrame | None" = None) -> dict:
+                return_df: bool = False, df: "pd.DataFrame | None" = None,
+                row_offset: int = 0) -> dict:
     """
     Build the transaction multigraph as a PyG-ready bundle.
 
@@ -118,8 +119,13 @@ def build_graph(csv_path: Path | None = None, max_rows: int | None = None,
                 f"Dataset not found. Checked: data/active/, data/IBM/, data/. "
                 f"Upload HI-Small_Trans.csv to one of these directories."
             )
-        logger.info(f"Multi-GNN: reading {csv_path.name} (max_rows={max_rows})...")
-        df = pd.read_csv(csv_path, nrows=max_rows)
+        logger.info(f"Multi-GNN: reading {csv_path.name} (row_offset={row_offset}, max_rows={max_rows})...")
+        # HI-Medium's early rows are overwhelmingly low-connectivity Reinvestment
+        # self-loops with very few positives — row_offset lets us start the read
+        # further into the file, at a window with meaningfully more laundering
+        # labels to learn from (see scripts/scan_label_density.py).
+        skip = range(1, row_offset + 1) if row_offset else None
+        df = pd.read_csv(csv_path, skiprows=skip, nrows=max_rows)
     else:
         logger.info(f"Multi-GNN: using provided DataFrame ({len(df)} rows)...")
     df = _normalize_columns(df)
@@ -332,13 +338,13 @@ def _temporal_split(t_edge, train=0.75, val=0.15):
 
 def train_multignn(csv_path: Path | None = None, max_rows: int | None = None,
                    epochs: int = 5, hidden: int = 64, layers: int = 3,
-                   batch_size: int = 4096, lr: float = 3e-3) -> dict:
+                   batch_size: int = 4096, lr: float = 3e-3, row_offset: int = 0) -> dict:
     """Full-batch training: the whole graph is encoded each step (no neighbour sampler,
     so no pyg-lib/torch-sparse needed). `batch_size` only chunks the cheap edge head."""
     if not HAS_TORCH:
         raise RuntimeError("PyTorch not available. Install torch + torch_geometric.")
 
-    bundle = build_graph(csv_path, max_rows)
+    bundle = build_graph(csv_path, max_rows, row_offset=row_offset)
     x, edge_index, edge_attr = bundle["x"], bundle["edge_index"], bundle["edge_attr"]
     y, label_index, t_edge, meta = bundle["y"], bundle["label_index"], bundle["t_edge"], bundle["meta"]
     deg = bundle["deg"]
