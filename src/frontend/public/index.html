@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=14" />
+  <link rel="stylesheet" href="/static/css/style.css?v=15" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -201,6 +201,17 @@
         <div class="color-card amber"><span class="label-up">Decisions Made</span>
           <div class="card-num amber" id="st-dec">—</div>
           <div class="card-sub">Confirmed / reviewed / dismissed</div>
+        </div>
+      </div>
+      <div class="db-chart-card" style="margin-top:var(--sp-4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:var(--sp-3)">
+          <h3 style="margin-bottom:0;display:flex;align-items:center;gap:8px">
+            <span class="live-dot"></span>Live Ingestion Feed
+          </h3>
+          <span id="live-feed-count" style="font-family:var(--mono);font-size:var(--text-sm);color:var(--muted)">—</span>
+        </div>
+        <div class="live-feed-list" id="live-feed-list">
+          <div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm);padding:var(--sp-2)">Waiting for ingested transactions…</div>
         </div>
       </div>
       <div class="db-grid-2">
@@ -617,7 +628,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=23"></script>
+  <script src="/static/js/app.js?v=24"></script>
 </body>
 
 </html>

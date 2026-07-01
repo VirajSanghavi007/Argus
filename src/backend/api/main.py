@@ -468,6 +468,16 @@ async def ingest(request: Request):
     }
 
 
+@app.get("/live/transactions")
+@limiter.limit("120/minute")
+def live_transactions(request: Request, limit: int = Query(default=15, ge=1, le=100)):
+    """Recent live-ingested transactions + running total, for the Dashboard feed."""
+    return {
+        "count": db.count_live_transactions(),
+        "transactions": db.get_live_transactions(limit),
+    }
+
+
 def _rescore_neighborhood(new_rows: list[dict]) -> None:
     """
     Option B: score only the k-hop neighborhood around newly ingested accounts.

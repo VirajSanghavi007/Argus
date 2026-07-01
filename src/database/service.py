@@ -228,6 +228,20 @@ def count_live_transactions() -> int:
             return cur.fetchone()[0]
 
 
+def get_live_transactions(limit: int = 15) -> list[dict]:
+    """Most recently ingested live transactions, newest first — powers the
+    Dashboard live-ingestion feed."""
+    with _PGConn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, timestamp, from_bank, from_account, to_bank, to_account, "
+                "amount_paid, payment_format, ingested_at "
+                "FROM live_transactions ORDER BY ingested_at DESC, id DESC LIMIT %s",
+                (limit,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
 # ── Whitelist (exempt accounts) ─────────────────────────────────────────────
 
 def list_whitelist_accounts() -> list[dict]:
