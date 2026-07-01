@@ -79,6 +79,7 @@ except ImportError:  # pragma: no cover - guarded for torch-less environments
 
 def _resolve_csv() -> Path:
     candidates = [
+        DATA_DIR / "archive" / "datasets" / "IBM" / "HI-Medium_Trans.csv",
         DATA_DIR / "TransXion" / "data" / "tx.csv",
         DATA_DIR / "active" / "HI-Small_Trans.csv",
         DATA_DIR / "IBM" / "HI-Small_Trans.csv",

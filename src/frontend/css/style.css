@@ -229,7 +229,8 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 .filter-pill.active{background:var(--red);border-color:var(--red);color:#fff}
 .sort-pill{font-family:var(--sans);font-size:var(--text-sm);font-weight:600;padding:var(--sp-1) var(--sp-4);
   border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);color:var(--muted);
-  transition:all .15s ease;flex:1}
+  transition:all .15s ease;flex:1;min-width:0;box-sizing:border-box;white-space:nowrap;text-align:center;
+  line-height:1.4}
 .sort-pill:hover{border-color:var(--red);color:var(--red)}
 .sort-pill.active{background:var(--red);border-color:var(--red);color:#fff}
 .filter-pill.blue-pill  {border-color:var(--blue-bd);color:var(--blue);background:var(--blue-bg)}
@@ -322,7 +323,8 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 .inv-stat:last-child{border-right:none}
 .is-label{font-family:var(--mono);font-size:9px;text-transform:uppercase;
   letter-spacing:.08em;color:var(--muted)}
-.is-val{font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-top:1px}
+.is-val{font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-top:1px;line-height:1.5}
+#is-span{font-size:var(--text-sm);line-height:1.7;padding-top:2px;display:inline-block}
 .graph-area{flex:1;position:relative;min-height:0}
 #cy{width:100%;height:100%;background:var(--row-alt)}
 .graph-toolbar{position:absolute;top:var(--sp-3);right:var(--sp-3);display:flex;gap:var(--sp-2)}
@@ -359,7 +361,8 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 .role-row{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) 0;
   font-family:var(--mono);font-size:var(--text-sm)}
 .role-dot{width:var(--sp-2);height:var(--sp-2);border-radius:50%;flex-shrink:0}
-.dec-btns{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-top:var(--sp-3)}
+.dec-btns{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)}
+.dec-btns .btn{width:100%;justify-content:center}
 .dec-reason-inp{width:100%;margin-top:var(--sp-2);resize:none;height:52px;font-size:var(--text-sm)}
 .dec-status-box{margin-top:var(--sp-3);padding:var(--sp-2) var(--sp-3);border-radius:var(--r);
   font-family:var(--mono);font-size:var(--text-sm);text-align:center;font-weight:500}
@@ -437,7 +440,7 @@ input::placeholder,textarea::placeholder{color:var(--light)}
 .verdict-title{font-family:var(--sans);font-weight:700;font-size:var(--text-base);
   text-transform:uppercase;letter-spacing:.06em;color:var(--blue);margin-bottom:var(--sp-1)}
 .verdict-desc{font-family:var(--mono);font-size:var(--text-sm);color:var(--muted);line-height:1.6}
-.wl-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4)}
+.wl-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);align-items:start}
 .wl-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:var(--sp-5)}
 .wl-panel-title{font-family:var(--sans);font-weight:700;font-size:var(--text-sm);
   text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:var(--sp-4)}
@@ -446,9 +449,8 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   margin-bottom:var(--sp-2);font-family:var(--mono);font-size:var(--text-sm);background:var(--row-alt)}
 .wl-remove-btn{background:none;border:none;color:var(--red);cursor:pointer;
   font-size:var(--text-lg);line-height:1;padding:0 var(--sp-1)}
-.wl-form{display:flex;flex-direction:column;gap:var(--sp-4);height:100%}
+.wl-form{display:flex;flex-direction:column;gap:var(--sp-4)}
 .wl-form input{width:100%}
-.wl-form .btn{margin-top:auto}
 .wl-exempt-banks{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-2)}
 .wl-rules-list{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-2)}
 .wl-rule-item{background:var(--row-alt);border:1px solid var(--border-lt);
@@ -552,7 +554,7 @@ input,textarea,select{
   text-transform:uppercase;letter-spacing:.08em;
 }
 .auth-field input{
-  background:rgba(255,255,255,.8);border:1px solid #CBD5E1;
+  background:#F8FAFC;border:1px solid #CBD5E1;
   border-radius:8px;padding:12px 14px;color:#0F172A;
   font-family:var(--mono);font-size:14px;
   transition:border .2s,box-shadow .2s;
@@ -564,7 +566,7 @@ input,textarea,select{
 .auth-field input:-webkit-autofill,
 .auth-field input:-webkit-autofill:hover,
 .auth-field input:-webkit-autofill:focus{
-  -webkit-box-shadow:0 0 0 1000px rgba(255,255,255,.8) inset;
+  -webkit-box-shadow:0 0 0 1000px #F8FAFC inset;
   -webkit-text-fill-color:#0F172A;
   border:1px solid #CBD5E1;
   transition:background-color 5000s ease-in-out 0s;

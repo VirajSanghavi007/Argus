@@ -24,16 +24,12 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..core.whitelist import (
-    load_whitelist, save_whitelist, filter_alerts,
+    load_whitelist, filter_alerts,
     add_to_whitelist, remove_from_whitelist,
-    DEFAULT_WHITELIST,
 )
 from ..utils.logging import setup_logging
 from . import ingest_store
-try:
-    from database import service as db
-except ImportError:
-    from ...database import service as db
+from database import service as db
 from config import (
     DATA_DIR, LOGS_DIR, CACHE_PATH, DRIFT_LOG, MODEL_PATH, MULTIGNN_MAX_ROWS,
 )
@@ -93,10 +89,6 @@ limiter = Limiter(key_func=get_remote_address)
 
 def _ensure_data_dir():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    wl_path = DATA_DIR / "whitelist.json"
-    if not wl_path.exists():
-        save_whitelist(DEFAULT_WHITELIST)
-        logger.info("Created default whitelist.json")
 
 
 def _load_cache() -> bool:
@@ -459,9 +451,7 @@ async def ingest(request: Request):
     if not rows:
         raise HTTPException(status_code=422, detail={"message": "No valid transactions", "errors": errors})
 
-    # Store to Postgres live_transactions table (if PG available) AND CSV fallback
-    db.store_live_transactions(rows)
-    stored = ingest_store.append_transactions(rows)
+    stored = db.store_live_transactions(rows)
 
     rid = request_id.get()
     logger.info(f"[{rid}] Ingested {stored} transaction(s) ({len(errors)} rejected)")
@@ -473,7 +463,7 @@ async def ingest(request: Request):
         "received": len(raw),
         "stored": stored,
         "rejected": errors,
-        "total_queued": ingest_store.count_live(),
+        "total_queued": db.count_live_transactions(),
         "note": "Stored. Neighborhood rescore running — new alerts appear within seconds.",
     }
 
@@ -822,6 +812,73 @@ def top_risky_accounts(request: Request, limit: int = Query(default=8, ge=1, le=
     } for r in rows]
 
 
+def _build_global_tx_graph() -> dict[str, list[dict]]:
+    """Adjacency list over EVERY flagged transaction across all in-memory
+    alerts (not just one alert's subgraph) — the basis for multi-hop
+    account-network search."""
+    adj: dict[str, list[dict]] = {}
+    with ALERTS_LOCK:
+        alerts = list(ALERTS.values())
+    for a in alerts:
+        for t in a.get("transactions", []):
+            frm, to = str(t.get("from")), str(t.get("to"))
+            if not frm or not to:
+                continue
+            edge_out = {"counterparty": to, "direction": "out", "amount": t.get("paid"),
+                        "alert_id": a["id"], "timestamp": t.get("ts")}
+            edge_in = {"counterparty": frm, "direction": "in", "amount": t.get("paid"),
+                       "alert_id": a["id"], "timestamp": t.get("ts")}
+            adj.setdefault(frm, []).append(edge_out)
+            adj.setdefault(to, []).append(edge_in)
+    return adj
+
+
+@app.get("/account/{account_id}/network")
+@limiter.limit("60/minute")
+def account_network(request: Request, account_id: str, hops: int = Query(default=2, ge=1, le=2)):
+    """BFS out from one account across the flagged-transaction graph, up to `hops` hops.
+    Powers the account-search graphical neighborhood view."""
+    account_id = str(account_id)
+    adj = _build_global_tx_graph()
+    risk_table = _account_risk_table()
+
+    if account_id not in adj:
+        return {"account_id": account_id, "found": False, "nodes": [], "edges": []}
+
+    visited = {account_id: 0}
+    frontier = [account_id]
+    edges_seen = set()
+    edges = []
+
+    for hop in range(1, hops + 1):
+        next_frontier = []
+        for node in frontier:
+            for e in adj.get(node, []):
+                cp = e["counterparty"]
+                src, dst = (node, cp) if e["direction"] == "out" else (cp, node)
+                ekey = (src, dst, e["alert_id"], e.get("timestamp"))
+                if ekey not in edges_seen:
+                    edges_seen.add(ekey)
+                    edges.append({"source": src, "target": dst, "amount": e["amount"], "alert_id": e["alert_id"]})
+                if cp not in visited:
+                    visited[cp] = hop
+                    next_frontier.append(cp)
+        frontier = next_frontier
+        if not frontier:
+            break
+
+    nodes = []
+    for acct, hop in visited.items():
+        r = risk_table.get(acct, {})
+        nodes.append({
+            "id": acct, "hop": hop,
+            "risk_score": round(r.get("max_importance", 0.0), 3),
+            "alert_count": len(r.get("alerts", [])),
+        })
+
+    return {"account_id": account_id, "found": True, "nodes": nodes, "edges": edges}
+
+
 @app.get("/account/{account_id}/history")
 @limiter.limit("100/minute")
 def account_history(request: Request, account_id: str):
@@ -881,7 +938,7 @@ class WhitelistAddBody(BaseModel):
 @limiter.limit("20/minute")
 def whitelist_add(request: Request, body: WhitelistAddBody):
     """Add account to whitelist (Issue #1: rate limited)."""
-    wl = add_to_whitelist(body.account_id)
+    wl = add_to_whitelist(body.account_id, body.reason)
     return {"status": "added", "account_id": body.account_id, "whitelist": wl}
 
 
@@ -918,19 +975,6 @@ def get_drift(request: Request):
     except Exception as e:
         logger.error(f"Failed to read drift log: {e}")
         raise HTTPException(status_code=500, detail="Failed to read drift data")
-
-
-@app.get("/validation")
-@limiter.limit("50/minute")
-def get_validation(request: Request):
-    validation_path = DATA_DIR / "validation_results.json"
-    if not validation_path.exists():
-        raise HTTPException(status_code=404, detail="Run validator.py first to generate validation data.")
-    try:
-        return json.loads(validation_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        logger.error(f"Failed to read validation data: {e}")
-        raise HTTPException(status_code=500, detail="Failed to read validation data")
 
 
 # ── Custom transaction prediction (Predict tab) ──────────────────────────────

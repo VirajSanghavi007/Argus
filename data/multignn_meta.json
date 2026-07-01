@@ -1,38 +1,40 @@
 {
   "metrics": {
-    "f1": 0.2,
-    "precision": 0.3333,
-    "recall": 0.1429,
-    "auc": 0.8036,
-    "ap": 0.151,
-    "threshold": 0.05,
-    "n_nodes": 11184,
-    "n_edges": 100000,
-    "n_train": 75000,
-    "n_val": 15000,
-    "n_test": 10000,
-    "epochs": 8,
+    "f1": 0.0073,
+    "precision": 0.0036,
+    "recall": 0.9394,
+    "auc": 0.7611,
+    "ap": 0.1702,
+    "threshold": 0.45,
     "hidden": 64,
     "layers": 3,
-    "max_rows": 100000,
-    "positives": 72
+    "pos_weight": 7.1
   },
   "encoders": {
     "currencies": [
-      "CHF",
-      "CNY",
-      "EUR",
-      "CAD",
-      "GBP",
-      "JPY",
-      "AUD",
-      "USD"
+      "US Dollar",
+      "Ruble",
+      "Euro",
+      "Shekel",
+      "Rupee",
+      "Saudi Riyal",
+      "Bitcoin",
+      "Canadian Dollar",
+      "UK Pound",
+      "Yuan",
+      "Yen",
+      "Mexican Peso",
+      "Brazil Real",
+      "Swiss Franc",
+      "Australian Dollar"
     ],
     "formats": [
-      "Mobile",
+      "Credit Card",
       "Cash",
-      "Card",
-      "Transfer"
+      "Wire",
+      "ACH",
+      "Cheque",
+      "Bitcoin"
     ]
   }
 }

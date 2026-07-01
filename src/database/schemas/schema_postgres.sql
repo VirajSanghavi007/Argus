@@ -61,6 +61,13 @@ CREATE TABLE IF NOT EXISTS live_transactions (
     scanned          BOOLEAN DEFAULT FALSE
 );
 
+-- Whitelisted (exempt) accounts — survives container restarts, unlike a flat file.
+CREATE TABLE IF NOT EXISTS whitelist_accounts (
+    account_id TEXT PRIMARY KEY,
+    reason     TEXT,
+    added_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_decisions_alert    ON decisions(alert_id);
 CREATE INDEX IF NOT EXISTS idx_decisions_ts       ON decisions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alerts_pattern     ON alerts(pattern_type);

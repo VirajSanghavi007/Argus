@@ -39,7 +39,7 @@ Set-Content "README.md" ($fm + (Get-Content "README.md" -Raw)) -Encoding utf8 -N
 # Stage everything except the PPT; force-add the gitignored demo artifacts
 git add .gitattributes
 git add -A ":!PPT Layout.pptx"
-git add -f data/pipeline_cache.json data/multignn_model.pt data/multignn_meta.json data/whitelist.json
+git add -f data/pipeline_cache.json data/multignn_model.pt data/multignn_meta.json
 git commit -m "HF Spaces deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-Null
 
 # Ship it

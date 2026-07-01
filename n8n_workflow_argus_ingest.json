@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.ARGUS_URL || 'http://localhost:8000' }}/ingest",
+        "url": "={{ $env.ARGUS_URL || 'https://virajsanghavi-argus.hf.space' }}/ingest",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

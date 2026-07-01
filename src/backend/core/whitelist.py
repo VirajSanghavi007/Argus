@@ -1,16 +1,17 @@
 """
 Whitelist / Exemption System
 
-Reads data/whitelist.json and provides helpers to:
+The exemption RULES (which patterns/banks/account-name-patterns are exempt)
+are static app config, defined below. The explicit exempt-account LIST is
+user data — mutated through the UI — and is persisted in Postgres (via
+database.service) so it survives container restarts, not a flat file.
+
+Provides helpers to:
   - Check if an account/bank is exempt from a pattern
   - Filter alerts (suppressing fully-exempt clusters, tagging partial)
   - Add / remove accounts from the explicit exempt list
 """
-import json
-from pathlib import Path
-
-DATA_DIR       = Path(__file__).parent.parent.parent.parent / "data"
-WHITELIST_PATH = DATA_DIR / "whitelist.json"
+from database import service as db
 
 DEFAULT_WHITELIST: dict = {
     "exempt_accounts": [],
@@ -50,15 +51,12 @@ DEFAULT_WHITELIST: dict = {
 
 
 def load_whitelist() -> dict:
-    if not WHITELIST_PATH.exists():
-        save_whitelist(DEFAULT_WHITELIST)
-        return dict(DEFAULT_WHITELIST)
-    return json.loads(WHITELIST_PATH.read_text(encoding="utf-8"))
-
-
-def save_whitelist(wl: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    WHITELIST_PATH.write_text(json.dumps(wl, indent=2), encoding="utf-8")
+    """Static rules from DEFAULT_WHITELIST + the dynamic exempt-account list from Postgres."""
+    accounts = db.list_whitelist_accounts()
+    wl = {**DEFAULT_WHITELIST}
+    wl["exempt_accounts"] = [a["account_id"] for a in accounts]
+    wl["exempt_accounts_detail"] = accounts  # [{account_id, reason}] — for UI display
+    return wl
 
 
 def _is_business(bank_name: str, patterns: list[str]) -> bool:
@@ -171,16 +169,11 @@ def filter_alerts(
     return kept, suppressed
 
 
-def add_to_whitelist(account_id: str) -> dict:
-    wl = load_whitelist()
-    if account_id not in wl["exempt_accounts"]:
-        wl["exempt_accounts"].append(account_id)
-        save_whitelist(wl)
-    return wl
+def add_to_whitelist(account_id: str, reason: str = "") -> dict:
+    db.add_whitelist_account(account_id, reason)
+    return load_whitelist()
 
 
 def remove_from_whitelist(account_id: str) -> dict:
-    wl = load_whitelist()
-    wl["exempt_accounts"] = [a for a in wl["exempt_accounts"] if a != account_id]
-    save_whitelist(wl)
-    return wl
+    db.remove_whitelist_account(account_id)
+    return load_whitelist()

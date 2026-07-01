@@ -13,9 +13,8 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 MODEL_PATH = DATA_DIR / "multignn_model.pt"
 META_PATH = DATA_DIR / "multignn_meta.json"
 
-# Database
-DB_PATH = DATA_DIR / "argus.db"
-SCHEMA_PATH = PROJECT_ROOT / "src" / "database" / "schemas" / "schema.sql"
+# Database (PostgreSQL only — see src/database/service.py)
+SCHEMA_PATH = PROJECT_ROOT / "src" / "database" / "schemas" / "schema_postgres.sql"
 
 # Pipeline cache / drift
 CACHE_PATH = DATA_DIR / "pipeline_cache.json"
@@ -26,4 +25,8 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
 # Pipeline
-MULTIGNN_MAX_ROWS = int(os.getenv("MULTIGNN_MAX_ROWS", "100000"))
+# HI-Medium's first ~100k rows are mostly low-connectivity Reinvestment
+# self-loops near the start of the file and yield zero alert clusters after
+# clustering/filtering. 800k rows reaches denser, more connected activity and
+# produces a healthy ~40 alerts — verified empirically against the trained model.
+MULTIGNN_MAX_ROWS = int(os.getenv("MULTIGNN_MAX_ROWS", "800000"))

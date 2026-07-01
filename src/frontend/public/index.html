@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=9" />
+  <link rel="stylesheet" href="/static/css/style.css?v=12" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -121,6 +121,8 @@
         aria-controls="view-dashboard">Dashboard</button>
       <button class="nav-tab" onclick="showView('investigate')" role="tab" aria-selected="false"
         aria-controls="view-investigate">Investigate</button>
+      <button class="nav-tab" onclick="showView('search')" role="tab" aria-selected="false"
+        aria-controls="view-search">Search</button>
       <button class="nav-tab" onclick="showView('cases')" role="tab" aria-selected="false"
         aria-controls="view-cases">Case Manager</button>
       <button class="nav-tab" onclick="showView('whitelist')" role="tab" aria-selected="false"
@@ -272,13 +274,14 @@
             </select>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3)">
-          <span class="label-up" style="margin:0;white-space:nowrap" title="Order the list by the model's laundering-risk score">Sort by risk</span>
-          <div style="display:flex;gap:var(--sp-2);flex:1">
-            <button class="sort-pill active" id="sort-recent" style="flex:1" onclick="setSortOrder('recent',this)"
-              aria-label="Sort by highest risk first" title="Highest-confidence alerts first">Highest</button>
-            <button class="sort-pill" id="sort-older" style="flex:1" onclick="setSortOrder('older',this)"
-              aria-label="Sort by lowest risk first" title="Lowest-confidence alerts first">Lowest</button>
+        <div style="margin-top:var(--sp-3)">
+          <label class="label-up" style="margin-bottom:var(--sp-1);display:block" title="Filter by when the alert's transactions happened">Date range</label>
+          <div style="display:flex;gap:var(--sp-2);align-items:center">
+            <input type="date" id="inv-date-start" onchange="renderSidebar()" aria-label="Activity from date" style="flex:1;min-width:0" />
+            <span style="color:var(--muted);font-size:11px">to</span>
+            <input type="date" id="inv-date-end" onchange="renderSidebar()" aria-label="Activity to date" style="flex:1;min-width:0" />
+            <button class="graph-btn" onclick="document.getElementById('inv-date-start').value='';document.getElementById('inv-date-end').value='';renderSidebar()"
+              aria-label="Clear date range" title="Clear date range">Clear</button>
           </div>
         </div>
         <div class="alert-list" id="alert-list" role="list" aria-label="Alert list"></div>
@@ -348,6 +351,29 @@
       </div>
     </div>
 
+    <!-- ═══ VIEW — ACCOUNT SEARCH (2-hop network) ═══ -->
+    <div class="view" id="view-search" role="tabpanel" aria-labelledby="tab-search">
+      <h2 style="font-family:var(--sans);font-weight:700;font-size:var(--text-xl);margin-bottom:var(--sp-3)">Account Search</h2>
+      <p style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm);margin-bottom:var(--sp-4)">
+        Search any account that appears in a flagged transaction. Shows its direct counterparties, and their
+        counterparties in turn (2 hops out).
+      </p>
+      <div style="display:flex;gap:var(--sp-2);margin-bottom:var(--sp-4);max-width:480px">
+        <input type="text" id="acct-search-inp" placeholder="Account ID, e.g. A000429" style="flex:1"
+          aria-label="Account ID to search" onkeydown="if(event.key==='Enter')searchAccountNetwork()" />
+        <button class="btn btn-blue" onclick="searchAccountNetwork()">Search</button>
+      </div>
+      <div id="acct-search-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:var(--sp-2)"></div>
+      <div class="graph-area" style="height:560px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
+        <div id="acct-search-cy" style="width:100%;height:100%;background:var(--row-alt)"></div>
+      </div>
+      <div style="margin-top:var(--sp-2);font-family:var(--mono);font-size:10px;color:var(--muted);display:flex;gap:16px">
+        <span><span style="color:#F59E0B">●</span> searched account</span>
+        <span><span style="color:#3B82F6">●</span> 1 hop</span>
+        <span><span style="color:#64748B">●</span> 2 hops</span>
+      </div>
+    </div>
+
     <!-- ═══ VIEW 3 — CASE MANAGER ═══ -->
     <div class="view" id="view-cases" role="tabpanel" aria-labelledby="tab-cases">
       <div class="cases-hdr">
@@ -361,6 +387,8 @@
             <span class="filter-pill" onclick="setCaseFilter('dismiss',this)" role="button"
               tabindex="0">Dismissed</span>
           </div>
+          <button class="btn btn-ghost" onclick="exportCSV()" aria-label="Export decisions as CSV"
+            style="font-size:var(--text-xs);padding:var(--sp-1) var(--sp-3)">Export CSV</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -403,9 +431,9 @@
             <div class="wl-rules-list" id="wl-rules-list" role="list" aria-label="Exemption rules"></div>
           </div>
         </div>
-        <div class="wl-panel" style="display:flex;flex-direction:column">
+        <div class="wl-panel">
           <div class="wl-panel-title">Add Account to Whitelist</div>
-          <form class="wl-form" style="flex:1" onsubmit="event.preventDefault();addWhitelistAccount()">
+          <form class="wl-form" onsubmit="event.preventDefault();addWhitelistAccount()">
             <div>
               <label for="wl-account-inp" class="label-up">Account ID</label>
               <input type="text" id="wl-account-inp" placeholder="e.g. 80012345" style="margin-top:var(--sp-2)" />
@@ -415,7 +443,7 @@
               <input type="text" id="wl-reason-inp" placeholder="e.g. Verified payroll account"
                 style="margin-top:var(--sp-2)" />
             </div>
-            <button class="btn btn-blue" type="submit" style="margin-top:auto">Add to Whitelist</button>
+            <button class="btn btn-blue" type="submit">Add to Whitelist</button>
           </form>
         </div>
       </div>
@@ -544,14 +572,39 @@
         <h3 style="font-size:15px;margin:20px 0 6px">Using the app, tab by tab</h3>
         <ul style="margin:0;padding-left:18px">
           <li><strong>Dashboard</strong> — the big picture: total alerts, money flagged, pattern mix, most-involved banks, and <strong>Top Risky Accounts</strong> (click one to investigate it).</li>
-          <li><strong>Investigate</strong> — pick an alert from the left list (sort by <strong>Highest / Lowest</strong> risk), see its network graph, step through each transfer, read the evidence, and click <strong>Confirm / Review / Dismiss</strong>. <strong>Click any node (dot)</strong> to see that account’s full transaction history and its risk score.</li>
-          <li><strong>Case Manager</strong> — every decision you’ve made, as an audit trail.</li>
+          <li><strong>Investigate</strong> — pick an alert from the left list (filter by date range), see its network graph, step through each transfer, read the evidence, and click <strong>Confirm / Review / Dismiss</strong>. <strong>Click any node</strong> for that account's panel and risk score; <strong>right-click</strong> for its full transaction graph.</li>
+          <li><strong>Search</strong> — look up any account that appears in a flagged transaction and see its 2-hop network: direct counterparties, and theirs in turn.</li>
+          <li><strong>Case Manager</strong> — every decision you've made, as an audit trail. Export it all as CSV.</li>
           <li><strong>Whitelist</strong> — mark trusted accounts (e.g. payroll) so they stop generating alerts.</li>
           <li><strong>Predict</strong> — upload your own CSV/Excel of transactions and have the model score them on demand.</li>
         </ul>
 
         <h3 style="font-size:15px;margin:20px 0 6px">How banks fight this today</h3>
         <p style="margin:0 0 16px">Traditional systems use fixed rules (“flag anything over $10,000”) and file Suspicious Activity Reports (SARs). Criminals dodge fixed thresholds easily. Argus adds an AI layer that learns laundering <em>behaviour</em> across the whole network, so it catches patterns rules miss — while still letting a human analyst make the final call.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NODE GRAPHICAL HISTORY MODAL (right-click a node) ═══ -->
+  <div id="node-history-overlay" onclick="if(event.target===this)closeNodeGraphHistory()" style="display:none;position:fixed;inset:0;
+    background:rgba(15,23,42,.65);z-index:10000;align-items:center;justify-content:center;padding:24px">
+    <div role="dialog" aria-label="Account transaction graph" style="background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;max-width:920px;width:100%;height:min(620px,86vh);display:flex;flex-direction:column;
+      box-shadow:0 24px 64px rgba(0,0,0,.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Full transaction history</div>
+          <div id="nh-title" style="font-family:var(--mono);font-size:18px;font-weight:800;color:var(--text)">—</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div id="nh-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right"></div>
+          <button onclick="closeNodeGraphHistory()" aria-label="Close" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;padding:4px 10px;font-size:16px;line-height:1">✕</button>
+        </div>
+      </div>
+      <div id="nh-cy" style="flex:1;min-height:0;background:var(--row-alt)"></div>
+      <div style="padding:8px 22px;border-top:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--muted);display:flex;gap:16px">
+        <span><span style="color:var(--red,#DA251C)">●</span> outgoing</span>
+        <span><span style="color:var(--green)">●</span> incoming</span>
       </div>
     </div>
   </div>
@@ -564,11 +617,11 @@
     <div class="tt-row"><span>Account risk</span><span id="tt-risk"></span></div>
     <div class="tt-row"><span>Volume</span><span id="tt-vol"></span></div>
     <div class="tt-row"><span>Txns</span><span id="tt-txn"></span></div>
-    <div class="tt-hint" style="margin-top:6px;font-size:9px;color:var(--muted)">Click node → full transaction history</div>
+    <div class="tt-hint" style="margin-top:6px;font-size:9px;color:var(--muted)">Click → account panel · Right-click → transaction graph</div>
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=16"></script>
+  <script src="/static/js/app.js?v=19"></script>
 </body>
 
 </html>

@@ -10,13 +10,14 @@ src/
     api/main.py          FastAPI application (all routes, lifespan, static serving)
     core/
       serializer.py      Raw alert → frontend JSON shape
-      whitelist.py        Account/bank exemption logic
+      whitelist.py        Account/bank exemption logic (rules in code, accounts in Postgres)
     models/multignn.py   Multi-GNN model (PNAConv + GINEConv, edge-level classifier)
     pipeline/detection.py Detection pipeline (graph build → score → cluster → serialize)
     utils/logging.py     Structured logging setup
+    tests/               Pytest suite (pure logic only — no DB, no torch)
   database/
-    service.py           SQLite persistence (alerts, decisions, audit trail)
-    schemas/schema.sql   Database schema
+    service.py           PostgreSQL persistence (alerts, decisions, audit trail, whitelist, sessions)
+    schemas/schema_postgres.sql   Database schema
   frontend/
     public/index.html    Dashboard HTML
     js/app.js            Vanilla JS frontend (deployed)
@@ -24,12 +25,10 @@ src/
     lib/                 Vendor libraries (Chart.js, Cytoscape)
   config.py              Central configuration (all paths, env vars, tunables)
 config/
-  requirements.txt       Production dependencies
   requirements-dev.txt   CI/test dependencies (no torch)
-  deployment.yaml        Render config reference (documentation only)
 scripts/
-  serve.py               Dev server launcher
-  train.py               Model training CLI
+  train.py               Model training CLI (offline — not used by the running server)
+requirements.txt         Production dependencies (used by Dockerfile and local installs)
 ```
 
 ## Running Locally
@@ -41,40 +40,39 @@ venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 
 # 2. Install dependencies
-pip install -r config/requirements.txt
+pip install -r requirements.txt
 
-# 3. Place dataset
-# Download HI-Small_Trans.csv into data/active/
-# (475MB — not in repo, gitignored)
+# 3. Point at a Postgres database (required — there is no SQLite fallback)
+export DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
-# 4. Train the model (optional — app runs in degraded mode without it)
-python scripts/train.py --epochs 8
+# 4. Place dataset
+# HI-Medium_Trans.csv under data/archive/datasets/IBM/ (gitignored, not in repo)
 
-# 5. Start the server
-python scripts/serve.py
+# 5. Train the model (optional — app runs in degraded mode without it)
+python scripts/train.py --epochs 6 --datasets data/archive/datasets/IBM/HI-Medium_Trans.csv --max-rows 1500000
+
+# 6. Start the server (no --reload: watchfiles spawns duplicate workers
+#    that fight over the port when the pipeline writes to data/ on startup)
+PYTHONPATH=src python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 # Open http://localhost:8000
 ```
 
-## Deploying to Render
+## Deploying
 
-Render uses dashboard settings, not `deployment.yaml`. Configure manually:
+Live deployment is Hugging Face Spaces (Docker SDK) — see `deploy-hf.ps1` for the one-command redeploy. The Dockerfile installs `requirements.txt` for the core API, then installs CPU `torch` + `torch_geometric` separately for the ML path. `DATABASE_URL` must be set as an HF Space **secret** (never committed to a file).
 
-1. **Build command:** `pip install -r config/requirements.txt`
-2. **Start command:** `uvicorn src.backend.api.main:app --host 0.0.0.0 --port $PORT`
-3. **Environment variables:**
-   - `PYTHONPATH=src` (required for imports)
-   - `PORT` is set automatically by Render
-4. **Python version:** 3.14 (set via `.python-version` file)
-
-The model file (`data/multignn_model.pt`) is not in the repo. Without it, the app starts in degraded mode — `/health` returns 200, but no alerts are generated. Upload the trained model to Render's disk or use the pipeline cache.
+The model file (`data/multignn_model.pt`) and `data/pipeline_cache.json` are gitignored but force-added by `deploy-hf.ps1` so the deployed app serves alerts immediately without re-running the pipeline cold.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8000` | Server port (Render sets this) |
+| `DATABASE_URL` | *(required)* | Postgres connection string — no local fallback |
+| `PORT` | `8000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
-| `MULTIGNN_MAX_ROWS` | `600000` | Max transactions to process |
+| `MULTIGNN_MAX_ROWS` | `800000` | Max transactions read from the dataset at pipeline startup |
+| `ARGUS_INGEST_KEY` | *(unset)* | If set, required as `X-API-Key` header on `POST /ingest` |
+| `ARGUS_SECRET` | `argus-aml-2026` | Salt for password hashing |
 
 ## Key Endpoints
 
@@ -86,3 +84,7 @@ The model file (`data/multignn_model.pt`) is not in the repo. Without it, the ap
 | `POST /alerts/{id}/decision` | Record analyst decision |
 | `GET /decisions` | Current decisions |
 | `GET /whitelist` | View whitelisted accounts |
+| `GET /accounts/risky` | Top accounts by aggregate laundering-edge risk |
+| `GET /account/{id}/history` | Full flagged-transaction history for one account |
+| `POST /ingest` | Stream live transactions in (single, batch, or `{transactions: [...]}`) |
+| `POST /predict` | Score an uploaded CSV/Excel of transactions on demand |

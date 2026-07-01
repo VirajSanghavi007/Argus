@@ -327,97 +327,8 @@ let currentStep  = -1;
 let playTimer    = null;
 let srcFilter    = 'all';
 let sevFilter    = 'all';
-let sortOrder    = 'recent';
 let caseFilter   = 'all';
 let dbCharts     = {};
-
-// ── Hash indexes for O(1) account/bank lookup ──
-let accountIndex = {}; // accountId → [{alertId, role, amount, timestamp}]
-let bankIndex    = {}; // bankName  → [{alertId, accountId, role}]
-
-function buildIndexes() {
-  accountIndex = {};
-  bankIndex    = {};
-  allAlerts.forEach(a => {
-    // Index from summary route nodes (always available)
-    (a.routeNodes||[]).forEach(nodeId => {
-      if (!accountIndex[nodeId]) accountIndex[nodeId] = [];
-      accountIndex[nodeId].push({ alertId: a.id, amount: a.totalMoved, ts: a.timeSpan, pattern: a.patternType });
-    });
-    // Index from loaded details (richer: has bank + role info)
-    const det = alertDetails[a.id];
-    if (det) {
-      (det.nodes||[]).forEach(n => {
-        const bankName = getBankName(n.bank||'');
-        // Account index
-        if (!accountIndex[n.id]) accountIndex[n.id] = [];
-        const existing = accountIndex[n.id].find(e => e.alertId === a.id);
-        if (!existing) accountIndex[n.id].push({ alertId: a.id, role: n.role, amount: a.totalMoved, ts: a.timeSpan, pattern: a.patternType });
-        else existing.role = n.role;
-        // Bank index
-        if (bankName) {
-          if (!bankIndex[bankName]) bankIndex[bankName] = [];
-          bankIndex[bankName].push({ alertId: a.id, accountId: n.id, role: n.role });
-        }
-      });
-    }
-  });
-}
-
-function lookupEntity(q) {
-  if (!q || q.length < 2) return null;
-  const lq = q.toLowerCase().trim();
-  // Exact account hash lookup first (O(1))
-  const exactAcc = Object.keys(accountIndex).find(k => k.toLowerCase() === lq);
-  if (exactAcc) return { type:'account', id: exactAcc, hits: accountIndex[exactAcc] };
-  // Partial account match
-  const partAcc = Object.keys(accountIndex).filter(k => k.toLowerCase().includes(lq));
-  if (partAcc.length) return { type:'account', id: partAcc[0], hits: accountIndex[partAcc[0]], alsoMatched: partAcc.slice(1) };
-  // Exact bank hash lookup (O(1))
-  const exactBank = Object.keys(bankIndex).find(k => k.toLowerCase() === lq);
-  if (exactBank) return { type:'bank', id: exactBank, hits: bankIndex[exactBank] };
-  // Partial bank match
-  const partBank = Object.keys(bankIndex).filter(k => k.toLowerCase().includes(lq));
-  if (partBank.length) return { type:'bank', id: partBank[0], hits: bankIndex[partBank[0]], alsoMatched: partBank.slice(1) };
-  return null;
-}
-
-function renderEntityLookup() {
-  const q = (document.getElementById('entity-search-inp')?.value||'').trim();
-  const out = document.getElementById('entity-lookup-out');
-  if (!out) return;
-  if (!q || q.length < 2) { out.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">Type an account ID or bank name to search…</div>'; return; }
-  const res = lookupEntity(q);
-  if (!res) { out.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)">No matches found for “${q}”</div>`; return; }
-  const typeLabel = res.type === 'account' ? '👤 Account' : '🏦 Bank';
-  const deduped = [...new Map((res.hits||[]).map(h => [h.alertId, h])).values()];
-  out.innerHTML = `
-    <div style="margin-bottom:var(--sp-3)">
-      <span style="font-family:var(--mono);font-size:10px;text-transform:uppercase;color:var(--muted);letter-spacing:.06em">${typeLabel}</span>
-      <div style="font-family:var(--mono);font-size:var(--text-lg);font-weight:700;color:var(--blue);margin-top:4px">${res.id}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${deduped.length} alert${deduped.length!==1?'s':''} involve this ${res.type}</div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
-      ${deduped.map(h => {
-        const a = allAlerts.find(x=>x.id===h.alertId);
-        const dec = decisions[h.alertId];
-        const decBadge = dec ? ({confirm:'badge-dec-confirm',review:'badge-dec-review',dismiss:'badge-dec-dismiss'}[dec.decision]||'') : '';
-        const roleTag = h.role ? `<span style="font-size:9px;padding:2px 6px;border-radius:10px;background:var(--row-alt);color:var(--muted);text-transform:uppercase;font-family:var(--mono)">${h.role}</span>` : '';
-        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:var(--sp-3) var(--sp-4);cursor:pointer;display:flex;align-items:center;justify-content:space-between"
-              onclick="jumpInvestigate('${h.alertId}')" role="button" tabindex="0">
-          <div>
-            <div style="font-family:var(--mono);font-size:var(--text-sm);font-weight:700;color:var(--text)">${formatAlertId(h.alertId)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">${a?formatPatternName(a.patternType):''} · ${h.amount||'?'}</div>
-          </div>
-          <div style="display:flex;gap:6px;align-items:center">
-            ${roleTag}
-            ${a?`<span class="badge ${decBadge||(SEV_BADGE[a.severity]||'badge-light')}">${a.severity}</span>`:''}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-    ${(res.alsoMatched||[]).length ? `<div style="margin-top:var(--sp-2);font-size:10px;color:var(--muted);font-family:var(--mono)">Also matched: ${res.alsoMatched.slice(0,5).join(', ')}${res.alsoMatched.length>5?'…':''}</div>` : ''}`;
-}
 
 /* ════════════════════════════════════════════
    INIT — loading stages
@@ -441,12 +352,14 @@ function setStage(idx) {
 let activityBins = null; // {bins: [], labels: []} from backend
 
 async function init() {
+  startLoadingAnimation();
   try {
     const statusData = await pollUntilReady();
     activityBins = statusData?.activity_bins || null;
     await loadAllAlerts();
 
     clearAppShellGuard();
+    stopLoadingAnimation();
     const ov = document.getElementById('loading-overlay');
     ov.style.transition = 'opacity .6s ease';
     ov.style.opacity = '0';
@@ -496,7 +409,6 @@ async function loadAllAlerts() {
   if (!r.ok) throw new Error(`Alerts endpoint failed with HTTP ${r.status}.`);
   allAlerts = await r.json();
   if (!Array.isArray(allAlerts)) throw new Error('Alerts endpoint returned an unexpected payload.');
-  buildIndexes();
   await loadDecisions();
 }
 
@@ -558,21 +470,22 @@ function closeHelp() {
   const o = document.getElementById('help-overlay');
   if (o) o.style.display = 'none';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeHelp(); endTour(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeHelp(); endTour(); closeNodeGraphHistory(); } });
 
 /* ════════════════════════════════════════════
    GUIDED PRODUCT TOUR
 ════════════════════════════════════════════ */
 const TOUR_STEPS = [
   { view:'dashboard',   sel:null,                       title:'Welcome to Argus', body:'A quick tour of how the platform spots money laundering. Takes under a minute — and you can replay it anytime from ⚙️ Settings.' },
-  { view:'dashboard',   sel:'.nav-tabs',                title:'Five workspaces', body:'Dashboard, Investigate, Case Manager, Whitelist and Predict. We\'ll pass through each one.' },
+  { view:'dashboard',   sel:'.nav-tabs',                title:'Six workspaces', body:'Dashboard, Investigate, Search, Case Manager, Whitelist and Predict. We\'ll pass through each one.' },
   { view:'dashboard',   sel:'.db-grid-4',               title:'The big picture', body:'Live totals at a glance: alerts raised, money flagged, high-severity cases, and decisions made.' },
   { view:'dashboard',   sel:'#risky-accounts',          title:'Top Risky Accounts', body:'Accounts ranked by the strongest laundering signal on any transfer they touch. Click a row to investigate that account directly.' },
   { view:'investigate', sel:'#alert-list',              title:'Alerts to investigate', body:'Each card is a cluster of suspicious transfers — always 3 or more accounts. Pick one to dig in.' },
-  { view:'investigate', sel:'#sort-recent',             title:'Sort by risk', body:'Order the list by the model\'s laundering-risk score: Highest or Lowest first.' },
-  { view:'investigate', sel:'#cy',                       title:'The money network', body:'Accounts are dots, transfers are arrows. Hover for details — and click any node to open that account\'s full transaction history and risk score.' },
+  { view:'investigate', sel:'#inv-date-start',          title:'Filter by date', body:'Narrow the list to a specific activity window — useful when you\'re working a known time period.' },
+  { view:'investigate', sel:'#cy',                       title:'The money network', body:'Accounts are dots, transfers are arrows. Hover for details, click a node for its account panel, or right-click for its full transaction graph.' },
   { view:'investigate', sel:'#ir-pattern-sec',          title:'Why it\'s flagged', body:'Concrete red flags — structuring, pass-through mules, velocity, cross-currency — not just the network shape. It\'s the combination of signals that matters.' },
   { view:'investigate', sel:'#view-investigate .dec-btns', title:'Make the call', body:'You\'re the analyst: Confirm, mark for Review, or Dismiss. Every decision is logged to the audit trail.' },
+  { view:'search',      sel:'#acct-search-inp',         title:'Account Search', body:'Search any account that shows up in a flagged transaction. See its direct counterparties, and their counterparties too — 2 hops out.' },
   { view:'cases',       sel:'.cases-hdr',               title:'Case Manager', body:'Every decision you\'ve made, with reasons — your complete audit trail.' },
   { view:'whitelist',   sel:'.wl-grid',                 title:'Whitelist', body:'Exempt trusted accounts (like verified payroll) so they stop generating alerts.' },
   { view:'predict',     sel:'.nav-tabs',                title:'Predict', body:'Upload your own CSV or Excel of transactions and have the model score them on demand.' },
@@ -720,8 +633,6 @@ function showView(name) {
     if (!currentAlert) renderInvestigateEmpty();
   }
   if (name === 'cases')       renderCaseManager();
-  if (name === 'search')      runSearch('', 'all');
-  if (name === 'validation')  loadValidation();
   if (name === 'whitelist')   loadWhitelist();
 }
 
@@ -939,29 +850,46 @@ function fmtMoney(n) {
 /* ════════════════════════════════════════════
    INVESTIGATE SIDEBAR
 ════════════════════════════════════════════ */
-function setSortOrder(order, el) {
-  sortOrder = order;
-  document.querySelectorAll('.sort-pill').forEach(p => p.classList.remove('active'));
-  if (el) el.classList.add('active');
-  renderSidebar();
+// Alert "start" = the first timestamp in its time span, e.g. "2025-01-01 09:35 — 2025-01-05 12:23".
+function alertStartDate(a) {
+  const raw = (a.timeSpan || '').split(' — ')[0];
+  if (!raw) return null;
+  const d = new Date(raw.replace(' ', 'T'));
+  return isNaN(d) ? null : d;
 }
 
 function renderSidebar() {
   const q = (document.getElementById('inv-search')?.value||'').toLowerCase();
   const patFilter = document.getElementById('inv-pattern-filter')?.value || 'all';
   const prioFilter = document.getElementById('inv-priority-filter')?.value || 'all';
+  const dateStart = document.getElementById('inv-date-start')?.value || '';
+  const dateEnd   = document.getElementById('inv-date-end')?.value || '';
 
   let filtered = allAlerts.filter(a => {
     if (patFilter !== 'all' && a.patternType !== patFilter) return false;
     if (prioFilter !== 'all' && (a.severity || '').toLowerCase() !== prioFilter.toLowerCase()) return false;
     if (q && !formatPatternName(a.patternType).toLowerCase().includes(q) &&
              !a.id.toLowerCase().includes(q) && !formatAlertId(a.id).toLowerCase().includes(q) && !a.sub.toLowerCase().includes(q)) return false;
+    if (dateStart || dateEnd) {
+      const d = alertStartDate(a);
+      if (!d) return false;
+      const dayStr = d.toISOString().slice(0, 10);
+      if (dateStart && dayStr < dateStart) return false;
+      if (dateEnd && dayStr > dateEnd) return false;
+    }
     return true;
   });
-  // Recent = high confidence first (default sort), Older = low confidence first
-  if (sortOrder === 'older') filtered = [...filtered].reverse();
+
+  // Default order: most recent activity first.
+  filtered = [...filtered].sort((x, y) => (alertStartDate(y)?.getTime()||0) - (alertStartDate(x)?.getTime()||0));
+
   const el = document.getElementById('alert-list');
   if (!el) return;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm);padding:var(--sp-4);text-align:center">
+      No alerts match the current filters.</div>`;
+    return;
+  }
   el.innerHTML = filtered.map(a => {
     const dec    = decisions[a.id];
     const active = (currentAlert?.id === a.id) ? 'active' : '';
@@ -1012,7 +940,6 @@ async function loadAlertById(id) {
       const r = await apiFetch(`/alerts/${id}`);
       if (!r.ok) return;
       alertDetails[id] = await r.json();
-      buildIndexes(); // refresh indexes with newly loaded detail
       renderDashboard();
     } catch(e) { return; }
   }
@@ -1166,7 +1093,13 @@ function renderGraph() {
   if (cy) cy.destroy();
   // Clear any empty-state placeholder so Cytoscape mounts into a clean, correctly-sized box
   const cyEl = document.getElementById('cy');
-  if (cyEl) cyEl.innerHTML = '';
+  if (cyEl) {
+    cyEl.innerHTML = '';
+    if (!cyEl._ctxMenuBound) {
+      cyEl.addEventListener('contextmenu', e => e.preventDefault());
+      cyEl._ctxMenuBound = true;
+    }
+  }
 
   const elements = [];
   // Build role-based short labels: S=source, D=destination, I/I1/I2...=intermediary
@@ -1265,6 +1198,8 @@ function renderGraph() {
   });
   cy.on('mouseout','edge', () => document.getElementById('tooltip').style.display='none');
   cy.on('tap','node', e => { const id = e.target.id(); highlightNode(id); openNodePanel(id); });
+  // Right-click (or long-press) a node: open its full transaction history as a graph.
+  cy.on('cxttap','node', e => { e.originalEvent?.preventDefault?.(); openNodeGraphHistory(e.target.id()); });
   // Tap on background → reset highlight and fit view
   cy.on('tap', e => { if (e.target === cy) { resetHighlight(); cy.fit(undefined, 40); } });
   // Always fit the graph to the container once the layout settles (kills whitespace)
@@ -1362,6 +1297,188 @@ function closeNodePanel() {
   const sec = document.getElementById('ir-node-sec');
   if (sec) { sec.style.display='none'; sec.innerHTML=''; }
   resetHighlight();
+}
+
+/* ════════════════════════════════════════════
+   NODE GRAPHICAL HISTORY (right-click a node)
+   Renders every flagged transaction touching this account as its own
+   mini network — the account in the centre, every counterparty around it.
+════════════════════════════════════════════ */
+let nhCy = null;
+
+async function openNodeGraphHistory(id) {
+  const overlay = document.getElementById('node-history-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.getElementById('nh-title').textContent = id;
+  document.getElementById('nh-meta').textContent = 'Loading…';
+  const cyEl = document.getElementById('nh-cy');
+  if (cyEl) cyEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:var(--mono);font-size:12px">Loading transaction graph…</div>';
+
+  let d = null;
+  try {
+    const r = await apiFetch(`/account/${encodeURIComponent(id)}/history`);
+    if (r.ok) d = await r.json();
+  } catch (e) { /* fall back below */ }
+
+  if (!d) {
+    const txns = (currentAlert?.transactions || []).filter(t => t.from === id || t.to === id).map(t => ({
+      direction: t.from === id ? 'out' : 'in', counterparty: t.from === id ? t.to : t.from,
+      amount: t.paid, timestamp: t.ts,
+    }));
+    d = { account_id: id, risk_score: nodeRiskFromAlert(id), txn_count: txns.length, alert_count: 1, transactions: txns };
+  }
+
+  const pct = Math.round((d.risk_score || 0) * 100);
+  document.getElementById('nh-meta').textContent =
+    `Risk ${pct}% · ${d.txn_count} flagged tx · ${d.alert_count} alert${d.alert_count === 1 ? '' : 's'}`;
+
+  _renderNodeHistoryGraph(id, d.transactions || []);
+}
+
+function _renderNodeHistoryGraph(centerId, txns) {
+  const cyEl = document.getElementById('nh-cy');
+  if (!cyEl) return;
+  cyEl.innerHTML = '';
+  if (nhCy) { nhCy.destroy(); nhCy = null; }
+
+  if (!txns.length) {
+    cyEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-family:var(--mono);font-size:12px">No flagged transactions for this account</div>';
+    return;
+  }
+
+  const elements = [{ data: { id: centerId, label: centerId, center: true } }];
+  const seen = new Set();
+  txns.forEach((t, i) => {
+    const cp = t.counterparty || '?';
+    if (!seen.has(cp)) { seen.add(cp); elements.push({ data: { id: cp, label: cp, center: false } }); }
+    const out = t.direction === 'out';
+    elements.push({
+      data: {
+        id: `nh-e${i}`,
+        source: out ? centerId : cp,
+        target: out ? cp : centerId,
+        label: t.amount || '',
+        dir: t.direction,
+      },
+    });
+  });
+
+  nhCy = cytoscape({
+    container: cyEl,
+    elements,
+    style: [
+      { selector: 'node', style: {
+          'background-color': '#3B82F6', 'label': 'data(label)', 'color': '#E2E8F0',
+          'font-size': 10, 'font-family': 'DM Mono', 'text-valign': 'bottom', 'text-margin-y': 6,
+          'width': 28, 'height': 28, 'border-width': 2, 'border-color': '#1E293B',
+        } },
+      { selector: 'node[?center]', style: {
+          'background-color': '#F59E0B', 'width': 42, 'height': 42, 'border-width': 3, 'border-color': '#fff',
+        } },
+      { selector: 'edge', style: {
+          'width': 2.5, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
+          'label': 'data(label)', 'font-size': 9, 'color': '#94A3B8', 'font-family': 'DM Mono',
+          'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
+        } },
+      { selector: 'edge[dir = "out"]', style: { 'line-color': '#DA251C', 'target-arrow-color': '#DA251C' } },
+      { selector: 'edge[dir = "in"]',  style: { 'line-color': '#10B981', 'target-arrow-color': '#10B981' } },
+    ],
+    layout: { name: 'concentric', concentric: n => n.data('center') ? 2 : 1, levelWidth: () => 1, padding: 40, animate: false },
+    userZoomingEnabled: true, userPanningEnabled: true,
+  });
+  nhCy.one('layoutstop', () => { nhCy.resize(); nhCy.fit(undefined, 40); });
+  setTimeout(() => { if (nhCy) { nhCy.resize(); nhCy.fit(undefined, 40); } }, 100);
+}
+
+function closeNodeGraphHistory() {
+  const overlay = document.getElementById('node-history-overlay');
+  if (overlay) overlay.style.display = 'none';
+  if (nhCy) { nhCy.destroy(); nhCy = null; }
+}
+
+/* ════════════════════════════════════════════
+   ACCOUNT SEARCH — 2-hop network
+════════════════════════════════════════════ */
+let searchCy = null;
+const HOP_COLOR = { 0: '#F59E0B', 1: '#3B82F6', 2: '#64748B' };
+
+async function searchAccountNetwork() {
+  const id = (document.getElementById('acct-search-inp')?.value || '').trim();
+  const meta = document.getElementById('acct-search-meta');
+  const cyEl = document.getElementById('acct-search-cy');
+  if (!id) { toast('Enter an account ID', 'warning'); return; }
+  meta.textContent = 'Searching…';
+  cyEl.innerHTML = '';
+  if (searchCy) { searchCy.destroy(); searchCy = null; }
+
+  let d;
+  try {
+    const r = await apiFetch(`/account/${encodeURIComponent(id)}/network?hops=2`);
+    d = await r.json();
+  } catch (e) { meta.textContent = 'Search failed — could not reach the server.'; return; }
+
+  if (!d.found || !d.nodes.length) {
+    meta.textContent = `No flagged transactions found for "${id}".`;
+    return;
+  }
+
+  const hop1 = d.nodes.filter(n => n.hop === 1).length;
+  const hop2 = d.nodes.filter(n => n.hop === 2).length;
+  meta.textContent = `${d.nodes.length} accounts in network (${hop1} direct, ${hop2} second-hop) · ${d.edges.length} transactions`;
+
+  const elements = [
+    ...d.nodes.map(n => ({ data: { id: n.id, label: n.id, hop: n.hop, risk: n.risk_score, alertCount: n.alert_count } })),
+    ...d.edges.map((e, i) => ({ data: { id: `se${i}`, source: e.source, target: e.target, label: e.amount || '' } })),
+  ];
+
+  searchCy = cytoscape({
+    container: cyEl,
+    elements,
+    style: [
+      { selector: 'node', style: {
+          'background-color': ele => HOP_COLOR[ele.data('hop')] || '#64748B',
+          'label': 'data(label)', 'color': '#E2E8F0', 'font-size': 10, 'font-family': 'DM Mono',
+          'text-valign': 'bottom', 'text-margin-y': 6,
+          'width': ele => ele.data('hop') === 0 ? 44 : 30, 'height': ele => ele.data('hop') === 0 ? 44 : 30,
+          'border-width': ele => ele.data('alertCount') > 1 ? 4 : 2,
+          'border-color': ele => ele.data('alertCount') > 1 ? '#DA251C' : '#1E293B',
+        } },
+      { selector: 'edge', style: {
+          'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle',
+          'line-color': '#475569', 'target-arrow-color': '#475569',
+          'label': 'data(label)', 'font-size': 8, 'color': '#94A3B8', 'font-family': 'DM Mono',
+          'text-background-color': '#0F172A', 'text-background-opacity': .85, 'text-background-padding': 2,
+        } },
+    ],
+    layout: { name: 'concentric', concentric: n => 3 - n.data('hop'), levelWidth: () => 1, padding: 40, animate: false },
+    userZoomingEnabled: true, userPanningEnabled: true,
+  });
+
+  searchCy.on('tap', 'node', e => {
+    const nid = e.target.id();
+    document.getElementById('acct-search-inp').value = nid;
+    searchAccountNetwork();
+  });
+  searchCy.on('mouseover', 'node', e => {
+    const n = e.target.data();
+    const pos = e.renderedPosition;
+    const box = cyEl.getBoundingClientRect();
+    const tt = document.getElementById('tooltip');
+    tt.style.left = (box.left + pos.x + 16) + 'px';
+    tt.style.top = (box.top + pos.y - 20) + 'px';
+    tt.style.display = 'block';
+    document.getElementById('tt-id').textContent = n.id;
+    document.getElementById('tt-bank').textContent = n.hop === 0 ? 'Searched account' : `${n.hop} hop${n.hop>1?'s':''} away`;
+    document.getElementById('tt-role').textContent = n.alertCount > 1 ? `In ${n.alertCount} alerts` : (n.alertCount === 1 ? 'In 1 alert' : '—');
+    document.getElementById('tt-risk').textContent = `${Math.round((n.risk||0)*100)}%`;
+    document.getElementById('tt-vol').textContent = '—';
+    document.getElementById('tt-txn').textContent = '—';
+  });
+  searchCy.on('mouseout', 'node', () => document.getElementById('tooltip').style.display = 'none');
+
+  searchCy.one('layoutstop', () => { searchCy.resize(); searchCy.fit(undefined, 40); });
+  setTimeout(() => { if (searchCy) { searchCy.resize(); searchCy.fit(undefined, 40); } }, 100);
 }
 
 /* ════════════════════════════════════════════
@@ -1511,6 +1628,31 @@ function renderRightPanel() {
       </ul>
     </div>` : '';
 
+  // Cross-alert linking — does any account in THIS alert also show up in others?
+  const myNodes = new Set(a.routeNodes || []);
+  const linked = new Map(); // accountId -> [other alert ids]
+  allAlerts.forEach(other => {
+    if (other.id === a.id) return;
+    (other.routeNodes || []).forEach(n => {
+      if (myNodes.has(n)) {
+        if (!linked.has(n)) linked.set(n, []);
+        linked.get(n).push(other.id);
+      }
+    });
+  });
+  const linkedHTML = linked.size ? `
+    <div style="margin-top:var(--sp-4)">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:var(--sp-2)">Linked to other alerts</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${[...linked.entries()].map(([acct, otherIds]) => `
+          <div style="font-size:var(--text-sm)">
+            <span style="font-family:var(--mono);font-weight:700;color:var(--blue);cursor:pointer" onclick="highlightNode('${acct}')">${acct}</span>
+            <span style="color:var(--muted)"> also appears in </span>
+            ${[...new Set(otherIds)].map(id=>`<span style="font-family:var(--mono);color:var(--text);cursor:pointer;text-decoration:underline" onclick="jumpInvestigate('${id}')">${formatAlertId(id)}</span>`).join(', ')}
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   document.getElementById('ir-pattern-sec').innerHTML = `
     <div class="ir-pattern-name" style="color:${sevColor}">${formatPatternName(a.patternType)}</div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2);align-items:center">
@@ -1518,7 +1660,8 @@ function renderRightPanel() {
     </div>
     ${secHTML}
     <div class="ir-desc" style="margin-top:var(--sp-3)">${generateHumanExplanation(a)}</div>
-    ${evidenceHTML}`;
+    ${evidenceHTML}
+    ${linkedHTML}`;
 
   document.getElementById('ir-source-sec').style.display='none';
   document.getElementById('ir-roles-sec').style.display='none';
@@ -1607,141 +1750,6 @@ function exportCSV() {
 }
 
 /* ════════════════════════════════════════════
-   SEARCH
-════════════════════════════════════════════ */
-function doSearch() {
-  const q = (document.getElementById('search-inp').value||'').trim();
-  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
-  runSearch(q, 'auto');
-}
-
-function qFilter(val, type='pat') {
-  const patDisplayMap = {
-    fanOut:'FAN-OUT', fanIn:'FAN-IN', scatterGather:'SCATTER-GATHER',
-    gatherScatter:'GATHER-SCATTER', cycle:'CYCLE', bipartite:'BIPARTITE',
-  };
-  document.querySelectorAll('.quick-filters .filter-pill').forEach(p => p.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-  document.getElementById('search-inp').value = (type==='pat' && patDisplayMap[val]) ? patDisplayMap[val] : '';
-  runSearch(val, type);
-}
-
-function normStr(s) { return String(s).replace(/[-_\s]/g,'').toLowerCase(); }
-
-function runSearch(q, type='auto') {
-  const container = document.getElementById('search-results');
-
-  let res;
-  if (type === 'all' || (!q && type !== 'sev' && type !== 'src' && type !== 'pat')) {
-    res = allAlerts.slice();
-  } else {
-    const lq = q.toLowerCase().trim();
-    res = allAlerts.filter(a => {
-      if (type === 'sev') return a.severity === lq.toUpperCase();
-      if (type === 'src') return a.source === lq;
-      if (type === 'pat') {
-        return normStr(a.patternType) === normStr(lq);
-      }
-      const nq = normStr(lq);
-      const det = alertDetails[a.id];
-      const nodes = (det ? det.nodes.map(n => n.id).join(' ') : '') || '';
-      const banks = (det ? det.nodes.map(n => getBankName(n.bank||'')).join(' ') : '') || '';
-      return normStr(formatPatternName(a.patternType)).includes(nq) ||
-        normStr(a.name||'').includes(nq) ||
-        a.id.toLowerCase().includes(lq) ||
-        (a.sub||'').toLowerCase().includes(lq) ||
-        nodes.toLowerCase().includes(lq) ||
-        banks.toLowerCase().includes(lq);
-    });
-  }
-
-  if (!res.length) {
-    container.innerHTML = `<div class="search-empty">No alerts match "${q}"</div>`;
-    return;
-  }
-
-  const header = `<div style="grid-column:1/-1;font-family:var(--mono);font-size:var(--text-sm);
-    color:var(--muted);margin-bottom:var(--sp-1)">${res.length} alert${res.length!==1?'s':''} found</div>`;
-
-  const cards = res.map(a => {
-    const patLabel = a.name || formatPatternName(a.patternType);
-    const mlPct = a.mlScore != null ? Math.round(a.mlScore * 100) : null;
-    return `
-    <div class="search-card sev-${a.severity}" style="border-left-color:${SEV_COLOR[a.severity]||'var(--border)'}"
-         onclick="jumpInvestigate('${a.id}')" role="button" tabindex="0"
-         aria-label="${patLabel}, ${a.severity} severity"
-         onkeydown="if(event.key==='Enter')jumpInvestigate('${a.id}')">
-      <div style="font-family:var(--sans);font-weight:700;font-size:var(--text-base);margin-bottom:var(--sp-2);color:var(--text)">
-        ${patLabel}
-      </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:var(--sp-2)">
-        <span class="badge ${SEV_BADGE[a.severity]||'badge-light'}">${a.severity}</span>
-      </div>
-      <div style="font-size:var(--text-sm);color:var(--muted);font-family:var(--mono);margin-bottom:var(--sp-1)">${a.sub||''}</div>
-      <div style="font-size:var(--text-sm);color:var(--text);font-family:var(--mono)">${a.totalMoved} · ${a.timeSpan} · ${a.node_count}n</div>
-    </div>`;
-  }).join('');
-
-  container.innerHTML = header + cards;
-}
-
-/* ════════════════════════════════════════════
-   VALIDATION
-════════════════════════════════════════════ */
-async function loadValidation() {
-  try {
-    const r=await apiFetch('/validation');
-    if (!r.ok) {
-      document.getElementById('val-compare-body').innerHTML=
-        `<tr><td colspan="5" style="color:var(--red);padding:var(--sp-4)">Run validator.py first to generate validation data.</td></tr>`;
-      return;
-    }
-    renderValidation(await r.json());
-  } catch(e) {
-    document.getElementById('val-compare-body').innerHTML=
-      `<tr><td colspan="5" style="color:var(--red);padding:var(--sp-4)">Error: ${e.message}</td></tr>`;
-  }
-}
-function setRing(circleId,pctId,val,color) {
-  const pct=Math.min(1,Math.max(0,val));
-  const el=document.getElementById(circleId);
-  if(el) el.setAttribute('stroke-dashoffset',(276*(1-pct)).toFixed(1));
-  const pe=document.getElementById(pctId);
-  if(pe) pe.textContent=`${Math.round(pct*100)}%`;
-}
-function renderValidation(data) {
-  const lab=data.labelled||{}, unlab=data.unlabelled||{};
-  setRing('ring-lab','ring-lab-pct',lab.overall_precision||0,'#00579C');
-  setRing('ring-unlab','ring-unlab-pct',unlab.overall_precision||0,'#7C3AED');
-  document.getElementById('val-compare-body').innerHTML=`
-    <tr><td style="font-family:var(--sans);font-weight:600">Labelled</td>
-        <td>${lab.total_alerts||0}</td><td>${lab.matched||0}</td>
-        <td>${pct(lab.overall_precision)}</td><td>${pct(lab.overall_recall)}</td></tr>
-    <tr><td style="font-family:var(--sans);font-weight:600">Unlabelled</td>
-        <td>${unlab.total_alerts||0}</td><td>${unlab.matched||0}</td>
-        <td>${pct(unlab.overall_precision)}</td><td>${pct(unlab.overall_recall)}</td></tr>
-    <tr style="border-top:2px solid var(--border)">
-        <td style="color:var(--amber);font-weight:600">Overlap</td>
-        <td style="color:var(--amber)">${data.overlap_count||0}</td>
-        <td>—</td><td>—</td><td>—</td></tr>`;
-  const prec=lab.per_pattern_precision||{}, rec=lab.per_pattern_recall||{};
-  const recs=lab.records||[];
-  const det={}, corr={};
-  recs.forEach(r=>{ det[r.detected_type]=(det[r.detected_type]||0)+1; if(r.status==='correct') corr[r.detected_type]=(corr[r.detected_type]||0)+1; });
-  document.getElementById('val-prec-body').innerHTML=Object.entries(prec).map(([pt,p])=>`
-    <tr><td>${pt}</td><td>${det[pt]||0}</td><td>${corr[pt]||0}</td>
-    <td><div style="display:flex;align-items:center;gap:var(--sp-2)">
-      <div class="prec-bar-bg" style="width:80px"><div class="prec-bar-fill" style="width:${(p*100).toFixed(0)}%"></div></div>${pct(p)}
-    </div></td></tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted)">No data</td></tr>';
-  document.getElementById('val-recall-body').innerHTML=Object.entries(rec).map(([pt,r])=>`
-    <tr><td>${pt}</td><td>?</td><td>${Math.round(r*10)}</td>
-    <td><div style="display:flex;align-items:center;gap:var(--sp-2)">
-      <div class="prec-bar-bg" style="width:80px"><div class="prec-bar-fill" style="width:${(r*100).toFixed(0)}%;background:var(--purple)"></div></div>${pct(r)}
-    </div></td></tr>`).join('')||'<tr><td colspan="4" style="color:var(--muted)">No data</td></tr>';
-}
-function pct(v){ return v!=null?`${Math.round((v||0)*100)}%`:'—'; }
-
-/* ════════════════════════════════════════════
    WHITELIST
 ════════════════════════════════════════════ */
 async function loadWhitelist() {
@@ -1754,10 +1762,14 @@ async function loadWhitelist() {
 }
 
 function renderWhitelistPanel(wl) {
-  const accs = wl.exempt_accounts||[];
+  const accs = wl.exempt_accounts_detail || (wl.exempt_accounts||[]).map(a=>({account_id:a, reason:''}));
   document.getElementById('wl-accounts-list').innerHTML = accs.length
-    ? accs.map(a=>`<div class="wl-account-item">${a}
-        <button class="wl-remove-btn" onclick="removeWhitelistAccount('${a}')" aria-label="Remove ${a} from whitelist">×</button></div>`).join('')
+    ? accs.map(a=>`<div class="wl-account-item">
+        <div>
+          <div>${a.account_id}</div>
+          ${a.reason ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${a.reason}</div>` : ''}
+        </div>
+        <button class="wl-remove-btn" onclick="removeWhitelistAccount('${a.account_id}')" aria-label="Remove ${a.account_id} from whitelist">×</button></div>`).join('')
     : `<span style="color:var(--light);font-size:var(--text-sm);font-family:var(--mono)">No accounts explicitly whitelisted</span>`;
 
   document.getElementById('wl-banks-list').innerHTML = (wl.exempt_banks||[])
