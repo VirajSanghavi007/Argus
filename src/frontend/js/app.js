@@ -1998,7 +1998,6 @@ async function runPrediction() {
         <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
         <td style="color:var(--blue);font-family:var(--mono);">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
         <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
-        <td style="font-family:var(--mono);">${tx.ml_score != null ? Number(tx.ml_score).toFixed(4) : '0.0000'}</td>
         <td>${flagged}</td>
       </tr>`;
     }).join('');
