@@ -1021,7 +1021,10 @@ function renderSidebar() {
                 role="button" tabindex="0" aria-label="${formatPatternName(a.patternType)} alert, ${a.severity} severity"
                 onkeydown="if(event.key==='Enter')loadAlertById('${a.id}')">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:var(--sp-1)">
-        <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${formatAlertId(a.id)}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div style="font-family:var(--sans); font-size:var(--text-lg); font-weight:800; color:var(--text);">${formatAlertId(a.id)}</div>
+          ${a.source === 'live_ingest' ? '<span class="badge badge-teal" style="font-size:9px" title="Added via live feed or Predict, not from the base dataset">➕ Added</span>' : ''}
+        </div>
         <span class="badge ${decBadge}">${a.severity}</span>
       </div>
       <div style="font-size:var(--text-xs); font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:2px">
@@ -1973,7 +1976,8 @@ async function removeWhitelistAccount(id) {
 /* ════════════════════════════════════════════
    PREDICT (custom transaction scoring)
 ════════════════════════════════════════════ */
-const PREDICT_MAX_ROWS = 5000;
+const PREDICT_MAX_ROWS = 1000;
+const PREDICT_MAX_DISPLAY = 100;  // cap rows rendered in the results table
 let predictAbort = null;
 let predictTimer = null;
 
@@ -2117,7 +2121,9 @@ async function runPrediction() {
       addBtn.style.display = 'inline-block';
     }
 
-    tbody.innerHTML = data.transactions.map(tx => {
+    // Render only the first 100 rows to keep the table snappy; note the rest.
+    const shown = data.transactions.slice(0, PREDICT_MAX_DISPLAY);
+    tbody.innerHTML = shown.map(tx => {
       const flagged = tx.flagged
         ? '<span class="badge badge-red">Flagged</span>'
         : '<span class="badge badge-green">OK</span>';
@@ -2130,6 +2136,16 @@ async function runPrediction() {
         <td>${flagged}</td>
       </tr>`;
     }).join('');
+
+    const flaggedTotal = lastPredictionFlagged.length;
+    const extra = data.transactions.length - shown.length;
+    thresholdLabel.textContent =
+      `Model Threshold: ${data.threshold} · ${data.transactions.length} scored · ${flaggedTotal} flagged`
+      + (extra > 0 ? ` · showing first ${PREDICT_MAX_DISPLAY} of ${data.transactions.length}` : '');
+
+    // Clear the inputs now that the batch has been processed.
+    document.getElementById('predict-data').value = '';
+    document.getElementById('predict-file').value = '';
 
     toast('Prediction complete', 'success');
   } catch (err) {

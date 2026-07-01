@@ -1000,7 +1000,7 @@ async def predict_transactions(
     import pandas as pd
     from ..models.multignn import load_multignn, build_graph, score_transactions
 
-    MAX_PREDICT_ROWS = 5000
+    MAX_PREDICT_ROWS = 1000
 
     try:
         if file:
