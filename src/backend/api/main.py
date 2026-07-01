@@ -215,6 +215,7 @@ def _run_pipeline():
         if _load_cache():
             DECISIONS = db.current_decisions()
             PIPELINE_READY.set()
+            _replay_live_transactions()
             return
 
         rid = request_id.get()
@@ -266,6 +267,23 @@ def _run_pipeline():
         logger.error(f"[{rid}] Pipeline failed: {e}", exc_info=True)
 
     PIPELINE_READY.set()
+    _replay_live_transactions()
+
+
+def _replay_live_transactions():
+    """Rebuild live-ingest alerts from the persisted live_transactions table.
+    In-memory ALERTS is wiped on every boot (startup loads only the base
+    pipeline cache), but the raw ingested rows survive in Postgres — so replay
+    them through the same neighborhood rescore to regenerate their alerts. This
+    is what makes live-ingested / Predict-added data 'last' across restarts."""
+    try:
+        rows = db.get_all_live_transactions()
+        if not rows:
+            return
+        logger.info(f"Replaying {len(rows)} persisted live transaction(s) to rebuild live alerts...")
+        _rescore_neighborhood(rows)
+    except Exception as e:
+        logger.warning(f"Live-transaction replay failed (non-fatal): {e}")
 
 
 # ── FastAPI App with Async Lifespan (Issue #3, #7) ──────────────────────────

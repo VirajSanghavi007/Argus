@@ -242,6 +242,32 @@ def get_live_transactions(limit: int = 15) -> list[dict]:
             return [dict(r) for r in cur.fetchall()]
 
 
+def get_all_live_transactions() -> list[dict]:
+    """Every stored live transaction, in the ingest-row shape the neighborhood
+    rescore expects. Used at startup to rebuild live-ingest alerts (in-memory
+    ALERTS is wiped on every boot, but these rows persist in Postgres)."""
+    with _PGConn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT timestamp, from_bank, from_account, to_bank, to_account, "
+                "amount_paid, amount_received, payment_currency, receiving_currency, "
+                "payment_format FROM live_transactions ORDER BY ingested_at ASC, id ASC"
+            )
+            rows = cur.fetchall()
+    return [{
+        "Timestamp": r["timestamp"],
+        "From Bank": r["from_bank"],
+        "From Account": r["from_account"],
+        "To Bank": r["to_bank"],
+        "To Account": r["to_account"],
+        "Amount Paid": r["amount_paid"],
+        "Amount Received": r["amount_received"],
+        "Payment Currency": r["payment_currency"],
+        "Receiving Currency": r["receiving_currency"],
+        "Payment Format": r["payment_format"],
+    } for r in rows]
+
+
 # ── Whitelist (exempt accounts) ─────────────────────────────────────────────
 
 def list_whitelist_accounts() -> list[dict]:
