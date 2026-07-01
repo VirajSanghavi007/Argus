@@ -522,7 +522,12 @@
       <div class="suppressed-section" style="margin-top: var(--sp-6);">
         <div class="suppressed-hdr">
           <span>Prediction Results</span>
-          <span id="predict-threshold" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)"></span>
+          <div style="display:flex;align-items:center;gap:var(--sp-3)">
+            <span id="predict-threshold" style="color:var(--muted);font-family:var(--mono);font-size:var(--text-sm)"></span>
+            <button class="btn btn-red" id="predict-add-btn" onclick="addPredictionsToSystem()"
+              style="display:none;font-size:var(--text-xs);padding:var(--sp-1) var(--sp-3)"
+              aria-label="Add flagged transactions to the system">➕ Add flagged to system</button>
+          </div>
         </div>
         <div class="table-wrap" style="max-height: 460px; overflow-y: auto;">
           <table class="data-table" aria-label="Prediction Results">
@@ -628,7 +633,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=24"></script>
+  <script src="/static/js/app.js?v=25"></script>
 </body>
 
 </html>

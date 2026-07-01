@@ -2013,6 +2013,46 @@ function _predictBusy(on) {
   }
 }
 
+// Flagged rows from the most recent prediction, kept so the analyst can push
+// them into the live system as labelled flagged transactions.
+let lastPredictionFlagged = [];
+
+// Send the last prediction's flagged rows through the same /ingest pipeline the
+// n8n feed uses — they get stored, folded into a neighborhood rescore, and
+// surface as alerts (Investigate) plus in the Dashboard Live Ingestion Feed.
+async function addPredictionsToSystem() {
+  const btn = document.getElementById('predict-add-btn');
+  if (!lastPredictionFlagged.length) { toast('No flagged transactions to add', 'warning'); return; }
+
+  // Map the Predict (IBM) schema → the /ingest schema.
+  const transactions = lastPredictionFlagged.map(tx => ({
+    'From Bank': String(tx['From Bank'] ?? ''),
+    'From Account': String(tx.Account ?? ''),
+    'To Bank': String(tx['To Bank'] ?? ''),
+    'To Account': String(tx['Account.1'] ?? ''),
+    'Amount Paid': parseFloat(tx['Amount Paid']) || 0,
+    'Payment Format': tx['Payment Format'] || 'Wire',
+    'Receiving Currency': tx['Receiving Currency'] || 'US Dollar',
+    'Timestamp': tx.Timestamp || new Date().toISOString(),
+  }));
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  try {
+    const r = await apiFetch('/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Ingest failed');
+    const d = await r.json();
+    toast(`Added ${d.stored} flagged transaction(s) to the system — check Dashboard & Investigate`, 'success');
+    if (btn) { btn.textContent = `✓ Added ${d.stored}`; }
+  } catch (e) {
+    toast(`Could not add to system: ${e.message}`, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = `➕ Add ${lastPredictionFlagged.length} flagged to system`; }
+  }
+}
+
 async function runPrediction() {
   const fileInput = document.getElementById('predict-file');
   const dataInput = document.getElementById('predict-data').value.trim();
@@ -2059,11 +2099,22 @@ async function runPrediction() {
     const data = await res.json();
     thresholdLabel.textContent = `Model Threshold: ${data.threshold}`;
 
+    const addBtn = document.getElementById('predict-add-btn');
+    if (addBtn) { addBtn.style.display = 'none'; addBtn.disabled = false; }
+    lastPredictionFlagged = [];
+
     if (!data.transactions || data.transactions.length === 0) {
       tbody.innerHTML = '';
       emptyMsg.textContent = 'No transactions processed.';
       emptyMsg.style.display = 'block';
       return;
+    }
+
+    // Remember the flagged rows so the analyst can push them into the system.
+    lastPredictionFlagged = data.transactions.filter(tx => tx.flagged);
+    if (addBtn && lastPredictionFlagged.length) {
+      addBtn.textContent = `➕ Add ${lastPredictionFlagged.length} flagged to system`;
+      addBtn.style.display = 'inline-block';
     }
 
     tbody.innerHTML = data.transactions.map(tx => {
