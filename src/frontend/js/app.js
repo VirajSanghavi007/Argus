@@ -2099,7 +2099,24 @@ async function addPredictionsToSystem() {
     });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Ingest failed');
     const d = await r.json();
-    toast(`Added ${d.stored} flagged transaction(s) to the system — check Dashboard & Investigate`, 'success');
+    toast(`Added ${d.stored} transaction(s) — detecting patterns…`, 'success');
+
+    // The neighborhood-rescore runs in a background thread server-side. Give it
+    // a moment, then reload alerts + rerender so the new pattern alerts and
+    // their graphs appear automatically — no manual refresh ("restart auto").
+    if (btn) btn.textContent = 'Detecting patterns…';
+    const before = allAlerts.filter(a => a.source === 'live_ingest').length;
+    await sleep(3000);
+    try {
+      await loadAllAlerts();
+      renderSidebar();
+      renderDashboard();
+      const added = allAlerts.filter(a => a.source === 'live_ingest').length - before;
+      toast(added > 0
+        ? `${added} new alert(s) detected — see Investigate (tagged “Added”)`
+        : 'Transactions stored; no new clusters cleared the detection threshold.',
+        added > 0 ? 'success' : 'info');
+    } catch (_) { /* refresh is best-effort */ }
     if (btn) { btn.textContent = `✓ Added ${d.stored}`; }
   } catch (e) {
     toast(`Could not add to system: ${e.message}`, 'error');
