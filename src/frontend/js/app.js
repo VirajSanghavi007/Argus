@@ -2038,6 +2038,7 @@ function clearPredictInput() {
   if (d) d.value = '';
   const tbody = document.getElementById('predict-tbody');
   if (tbody) tbody.innerHTML = '';
+  predictRows = []; predictShown = 0;
   const empty = document.getElementById('predict-empty');
   if (empty) { empty.textContent = 'No results yet. Run a prediction to see scores.'; empty.style.display = 'block'; }
   document.getElementById('predict-threshold').textContent = '';
@@ -2124,6 +2125,57 @@ async function addPredictionsToSystem() {
   }
 }
 
+// Full prediction result set + how many rows are currently in the DOM.
+// Rows render 100 at a time; the rest load as the user scrolls (infinite scroll).
+let predictRows = [];
+let predictShown = 0;
+let predictInfo = { threshold: 0, scored: 0, flagged: 0 };
+
+function _predictRowHtml(tx) {
+  const flagged = tx.flagged
+    ? '<span class="badge badge-red">⚑ Flagged</span>'
+    : '<span class="badge badge-green">OK</span>';
+  return `<tr class="${tx.flagged ? 'predict-row-flagged' : ''}">
+    <td style="font-family:var(--mono);">${tx.Timestamp || ''}</td>
+    <td>${tx['From Bank'] || ''}:${tx.Account || ''}</td>
+    <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
+    <td style="color:var(--blue);font-family:var(--mono);font-weight:700">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
+    <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
+    <td>${flagged}</td>
+  </tr>`;
+}
+
+// Append the next chunk of rows and update the "showing N of M" header note.
+function renderMorePredictRows() {
+  const tbody = document.getElementById('predict-tbody');
+  if (!tbody || predictShown >= predictRows.length) return;
+  const next = predictRows.slice(predictShown, predictShown + PREDICT_MAX_DISPLAY);
+  tbody.insertAdjacentHTML('beforeend', next.map(_predictRowHtml).join(''));
+  predictShown += next.length;
+
+  const label = document.getElementById('predict-threshold');
+  if (label) {
+    const more = predictShown < predictRows.length ? ' · scroll for more' : '';
+    label.textContent =
+      `Model Threshold: ${predictInfo.threshold} · ${predictInfo.scored} scored · `
+      + `${predictInfo.flagged} flagged · showing ${predictShown} of ${predictInfo.scored}${more}`;
+  }
+}
+
+// Wire the Predict view's scroll once: when the user nears the bottom, load
+// the next chunk. #view-predict is the scroll container (overflow-y:auto).
+function _initPredictInfiniteScroll() {
+  const view = document.getElementById('view-predict');
+  if (!view || view._infiniteWired) return;
+  view._infiniteWired = true;
+  view.addEventListener('scroll', () => {
+    if (predictShown < predictRows.length &&
+        view.scrollTop + view.clientHeight >= view.scrollHeight - 240) {
+      renderMorePredictRows();
+    }
+  });
+}
+
 async function runPrediction() {
   const fileInput = document.getElementById('predict-file');
   const dataInput = document.getElementById('predict-data').value.trim();
@@ -2188,27 +2240,13 @@ async function runPrediction() {
       addBtn.style.display = 'inline-block';
     }
 
-    // Render only the first 100 rows to keep the table snappy; note the rest.
-    const shown = data.transactions.slice(0, PREDICT_MAX_DISPLAY);
-    tbody.innerHTML = shown.map(tx => {
-      const flagged = tx.flagged
-        ? '<span class="badge badge-red">⚑ Flagged</span>'
-        : '<span class="badge badge-green">OK</span>';
-      return `<tr class="${tx.flagged ? 'predict-row-flagged' : ''}">
-        <td style="font-family:var(--mono);">${tx.Timestamp || ''}</td>
-        <td>${tx['From Bank'] || ''}:${tx.Account || ''}</td>
-        <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
-        <td style="color:var(--blue);font-family:var(--mono);font-weight:700">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
-        <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
-        <td>${flagged}</td>
-      </tr>`;
-    }).join('');
-
-    const flaggedTotal = lastPredictionFlagged.length;
-    const extra = data.transactions.length - shown.length;
-    thresholdLabel.textContent =
-      `Model Threshold: ${data.threshold} · ${data.transactions.length} scored · ${flaggedTotal} flagged`
-      + (extra > 0 ? ` · showing first ${PREDICT_MAX_DISPLAY} of ${data.transactions.length}` : '');
+    // Render in chunks of 100 with infinite scroll (see renderMorePredictRows).
+    predictRows = data.transactions;
+    predictShown = 0;
+    predictInfo = { threshold: data.threshold, scored: data.transactions.length, flagged: lastPredictionFlagged.length };
+    tbody.innerHTML = '';
+    renderMorePredictRows();          // first 100
+    _initPredictInfiniteScroll();     // load the rest as the user scrolls
 
     // Clear the inputs now that the batch has been processed.
     document.getElementById('predict-data').value = '';
