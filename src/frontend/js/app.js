@@ -455,6 +455,34 @@ async function loadAllAlerts() {
   await loadDecisions();
 }
 
+// Live in-app refresh: re-pull alerts/decisions/feed and rerender the active
+// view WITHOUT reloading the page — so the session (and current view) survive
+// and the analyst watches counts/patterns move up as new data lands.
+async function refreshData() {
+  const icon = document.getElementById('refresh-icon');
+  const btn  = document.getElementById('refresh-btn');
+  if (icon) icon.classList.add('spinning');
+  if (btn)  btn.disabled = true;
+  const before = allAlerts.length;
+  try {
+    await loadAllAlerts();  // refetches /alerts + /decisions, reuses the session token
+    const active = document.querySelector('.view.active')?.id || '';
+    if (active === 'view-dashboard')        renderDashboard();
+    else if (active === 'view-investigate') renderSidebar();
+    else if (active === 'view-cases')       renderCaseManager();
+    renderLiveFeed();  // always refresh the ingestion feed + count
+    const delta = allAlerts.length - before;
+    toast(delta > 0
+      ? `Refreshed — ${delta} new alert(s) · ${allAlerts.length} total`
+      : `Refreshed · ${allAlerts.length} alerts`, delta > 0 ? 'success' : 'info');
+  } catch (e) {
+    toast(`Refresh failed: ${e.message || 'unknown error'}`, 'error');
+  } finally {
+    if (icon) icon.classList.remove('spinning');
+    if (btn)  btn.disabled = false;
+  }
+}
+
 // Hydrate analyst decisions from the persistent audit log so they survive restarts.
 async function loadDecisions() {
   try {

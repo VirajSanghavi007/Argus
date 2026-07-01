@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lobster&family=Poppins:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=17" />
+  <link rel="stylesheet" href="/static/css/style.css?v=18" />
   <script src="/static/lib/cytoscape.min.js"></script>
   <script src="/static/lib/chart.umd.min.js"></script>
   <style>
@@ -133,6 +133,11 @@
     <div class="nav-status">
       <span id="nav-user"
         style="font-family:var(--sans);font-size:var(--text-sm);font-weight:600;color:rgba(255,255,255,.6);margin-right:var(--sp-2);display:none"></span>
+      <!-- Live refresh button — re-pulls alerts/decisions/feed without reloading the page (stays logged in) -->
+      <button id="refresh-btn" onclick="refreshData()" title="Refresh data (stay logged in)" aria-label="Refresh data" style="
+        background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--r);
+        padding:var(--sp-1) var(--sp-2);cursor:pointer;font-size:var(--text-base);color:#fff;line-height:1;
+        transition:all .15s ease;flex-shrink:0;margin-right:var(--sp-2)"><span id="refresh-icon" style="display:inline-block">🔄</span></button>
       <!-- Settings button -->
       <div style="position:relative" id="settings-btn">
         <button onclick="toggleSettings()" title="Settings" aria-label="Open settings" style="
@@ -633,7 +638,7 @@
   </div>
   <div id="toasts" aria-live="polite" aria-label="Notifications"></div>
 
-  <script src="/static/js/app.js?v=29"></script>
+  <script src="/static/js/app.js?v=30"></script>
 </body>
 
 </html>

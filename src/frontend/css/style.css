@@ -293,6 +293,10 @@ body.dark input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:i
 .predict-row-flagged td{background:var(--red-bg) !important;
   box-shadow:inset 3px 0 0 0 var(--red)}
 .predict-row-flagged:hover td{background:var(--red-bg) !important}
+/* Navbar refresh button spin while loading */
+#refresh-btn:hover{background:rgba(255,255,255,.22) !important}
+.spinning{animation:refresh-spin .7s linear infinite}
+@keyframes refresh-spin{to{transform:rotate(360deg)}}
 /* Investigate sidebar — date range filter */
 .date-range{margin-top:var(--sp-3);background:var(--bg);border:1px solid var(--border-lt);
   border-radius:8px;padding:var(--sp-3)}
