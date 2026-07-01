@@ -60,5 +60,11 @@ node_modules/
 # fraud_model.pkl is ~648KB
 data/*.csv
 
+# Demo/test CSVs generated for the Predict tab. MUST stay ignored: the HF
+# deploy script does `git add -A` onto a temp branch then `git checkout -f
+# main`, which deletes any tracked-only-on-that-branch file from the working
+# tree. Ignoring them keeps deploys from eating these files.
+/argus_*.csv
+
 # Local pip wheel cache � never commit (huge, platform-specific)
 wheels/
