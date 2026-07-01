@@ -390,6 +390,11 @@ input::placeholder,textarea::placeholder{color:var(--light)}
   font-family:var(--mono);font-size:var(--text-sm)}
 
 /* ════════════════════════════════════════
+   VIEW — PREDICT
+════════════════════════════════════════ */
+#view-predict{overflow-y:auto;padding:var(--sp-6);gap:var(--sp-4)}
+
+/* ════════════════════════════════════════
    VIEW 4 — SEARCH
 ════════════════════════════════════════ */
 #view-search{overflow-y:auto;padding:var(--sp-6);gap:var(--sp-4);align-items:center}
