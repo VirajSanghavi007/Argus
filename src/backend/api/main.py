@@ -1074,10 +1074,21 @@ async def predict_transactions(
 
 # ── SPA fallback (must be last — catches all unmatched paths) ─────────────
 
+# index.html must never be cached by the browser: it's the one file that
+# references the versioned assets (app.js?v=NN, style.css?v=NN). If a stale
+# copy is served, the browser keeps requesting old asset versions and never
+# sees new deploys. no-store forces a fresh fetch every load; the versioned
+# JS/CSS underneath can still be cached hard.
+_INDEX_NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+
+
+def _index_response(frontend) -> FileResponse:
+    return FileResponse(str(frontend / "index.html"), headers=_INDEX_NO_CACHE)
+
+
 @app.get("/")
 def serve_frontend():
-    frontend = get_frontend_dir()
-    return FileResponse(str(frontend / "index.html"))
+    return _index_response(get_frontend_dir())
 
 @app.get("/{path_name:path}")
 def serve_spa_fallback(path_name: str):
@@ -1085,4 +1096,4 @@ def serve_spa_fallback(path_name: str):
     file_path = (frontend / path_name).resolve()
     if file_path.is_relative_to(frontend.resolve()) and file_path.is_file():
         return FileResponse(str(file_path))
-    return FileResponse(str(frontend / "index.html"))
+    return _index_response(frontend)
