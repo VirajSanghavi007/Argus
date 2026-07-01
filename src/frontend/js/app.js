@@ -798,20 +798,38 @@ async function renderLiveFeed() {
 
   list.innerHTML = d.transactions.map(t => {
     const isNew = !liveFeedSeen.has(t.id);
-    const when = t.ingested_at ? new Date(t.ingested_at).toLocaleTimeString() : '';
+    const when = relativeTime(t.ingested_at);
     return `<div class="live-feed-row${isNew ? ' is-new' : ''}">
+      <span class="live-feed-bullet"></span>
       <div class="live-feed-route">
-        <span class="live-feed-acct">${t.from_bank}:${t.from_account}</span>
+        <span class="live-feed-acct" title="${t.from_bank}:${t.from_account}">${t.from_bank}:${t.from_account}</span>
         <span class="live-feed-arrow">→</span>
-        <span class="live-feed-acct">${t.to_bank}:${t.to_account}</span>
+        <span class="live-feed-acct" title="${t.to_bank}:${t.to_account}">${t.to_bank}:${t.to_account}</span>
       </div>
-      <span class="live-feed-fmt">${t.payment_format || ''}</span>
-      <span class="live-feed-amt">${fmtMoney(t.amount_paid)}</span>
-      <span style="color:var(--muted);font-size:11px;flex-shrink:0">${when}</span>
+      <div class="live-feed-meta">
+        <span class="live-feed-amt">${fmtMoney(t.amount_paid)}</span>
+        <span class="live-feed-fmt">${t.payment_format || '—'}</span>
+        <span class="live-feed-time">${when}</span>
+      </div>
     </div>`;
   }).join('');
 
   d.transactions.forEach(t => liveFeedSeen.add(t.id));
+}
+
+// "just now" / "2m ago" / "3h ago" — short relative time for the live feed.
+function relativeTime(iso) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 10) return 'just now';
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 // Poll the feed every 4s while the Dashboard is the active view.
@@ -887,8 +905,29 @@ function renderActivityChart() {
     return ts ? new Date(ts.replace(' ','T')) : null;
   }).filter(Boolean);
 
-  const WIN_START = rangeStart || (allTs.length ? new Date(Math.min(...allTs)) : new Date(Date.now() - 48*3600000));
-  const WIN_END   = rangeEnd   || (allTs.length ? new Date(Math.max(...allTs) + 3600000) : new Date(WIN_START.getTime() + 48*3600000));
+  // Auto-focus: if the data is split by a big time gap (e.g. 2022 base data
+  // plus freshly-injected 2026 transactions), a linear axis across the whole
+  // span collapses to a flat line. Detect the largest gap and default the view
+  // to whichever dense cluster has the most alerts — so the chart is readable.
+  let autoStart = null, autoEnd = null;
+  if (!rangeStart && !rangeEnd && allTs.length > 3) {
+    const sorted = [...allTs].sort((a, b) => a - b);
+    let gapIdx = -1, gapSize = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const g = sorted[i] - sorted[i - 1];
+      if (g > gapSize) { gapSize = g; gapIdx = i; }
+    }
+    const THIRTY_DAYS = 30 * 24 * 3600000;
+    if (gapSize > THIRTY_DAYS && gapIdx > 0) {
+      const left = sorted.slice(0, gapIdx), right = sorted.slice(gapIdx);
+      const keep = right.length >= left.length ? right : left;  // prefer the busier (ties → newer) cluster
+      autoStart = new Date(+keep[0]);
+      autoEnd   = new Date(+keep[keep.length - 1] + 3600000);
+    }
+  }
+
+  const WIN_START = rangeStart || autoStart || (allTs.length ? new Date(Math.min(...allTs)) : new Date(Date.now() - 48*3600000));
+  const WIN_END   = rangeEnd   || autoEnd   || (allTs.length ? new Date(Math.max(...allTs) + 3600000) : new Date(WIN_START.getTime() + 48*3600000));
   const totalHours = Math.max(1, Math.ceil((WIN_END - WIN_START) / 3600000));
   const bucketHours = Math.max(1, Math.ceil(totalHours / 48));
   const numBuckets = Math.ceil(totalHours / bucketHours);
@@ -904,22 +943,33 @@ function renderActivityChart() {
       if (idx >= 0 && idx < numBuckets) bins[idx]++;
     }
   });
+  const showYear = totalHours > 60 * 24;   // span over ~60 days → include year
+  const showDayOnly = bucketHours >= 24;    // buckets a day+ wide → drop the hour
   tlLabels = Array.from({length:numBuckets},(_,i) => {
     const d = new Date(WIN_START.getTime() + i * bucketHours * 3600000);
-    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:00`;
+    const ymd = `${showYear ? d.getFullYear()+'/' : ''}${d.getMonth()+1}/${d.getDate()}`;
+    return showDayOnly ? ymd : `${ymd} ${String(d.getHours()).padStart(2,'0')}:00`;
   });
 
   if (dbCharts.tl) dbCharts.tl.destroy();
-  dbCharts.tl = new Chart(document.getElementById('chart-tl').getContext('2d'), {
+  const tlCtx = document.getElementById('chart-tl').getContext('2d');
+  const grad = tlCtx.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, 'rgba(218,37,28,.28)');
+  grad.addColorStop(1, 'rgba(218,37,28,0)');
+  dbCharts.tl = new Chart(tlCtx, {
     type:'line',
     data:{ labels: tlLabels,
       datasets:[{ label:'Flagged Transactions', data:bins,
-        borderColor:'#DA251C', backgroundColor:'rgba(218,37,28,.08)',
-        tension:.4, fill:true, pointRadius:1, borderWidth:2 }]},
+        borderColor:'#DA251C', backgroundColor:grad,
+        tension:.35, fill:true, pointRadius:2, pointHoverRadius:5,
+        pointBackgroundColor:'#DA251C', borderWidth:2.5 }]},
     options:{ animation:false,
-      plugins:{legend:{labels:{color:axisColor,font:{size:10}}}},
-      scales:{ x:{ticks:{color:axisColor,maxTicksLimit:12,font:{size:10}}},
-               y:{ticks:{color:axisColor,font:{size:10}},beginAtZero:true} },
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{labels:{color:axisColor,font:{size:10}}},
+        tooltip:{ callbacks:{ label:c => `${c.parsed.y} flagged` } } },
+      scales:{ x:{grid:{display:false},ticks:{color:axisColor,maxTicksLimit:12,font:{size:10},maxRotation:0,autoSkip:true}},
+               y:{ticks:{color:axisColor,font:{size:10},precision:0},beginAtZero:true,grid:{color:isDark?'rgba(148,163,184,.1)':'rgba(71,85,105,.08)'}} },
       maintainAspectRatio:false }
   });
 }
@@ -2125,13 +2175,13 @@ async function runPrediction() {
     const shown = data.transactions.slice(0, PREDICT_MAX_DISPLAY);
     tbody.innerHTML = shown.map(tx => {
       const flagged = tx.flagged
-        ? '<span class="badge badge-red">Flagged</span>'
+        ? '<span class="badge badge-red">⚑ Flagged</span>'
         : '<span class="badge badge-green">OK</span>';
-      return `<tr>
+      return `<tr class="${tx.flagged ? 'predict-row-flagged' : ''}">
         <td style="font-family:var(--mono);">${tx.Timestamp || ''}</td>
         <td>${tx['From Bank'] || ''}:${tx.Account || ''}</td>
         <td>${tx['To Bank'] || ''}:${tx['Account.1'] || ''}</td>
-        <td style="color:var(--blue);font-family:var(--mono);">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
+        <td style="color:var(--blue);font-family:var(--mono);font-weight:700">${fmtMoney(parseFloat(tx['Amount Paid']) || 0)}</td>
         <td>${tx['Payment Format'] || ''} / ${tx['Receiving Currency'] || ''}</td>
         <td>${flagged}</td>
       </tr>`;
